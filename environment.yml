@@ -1,0 +1,28 @@
+name: telco_churn_detection
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+  - ipywidgets
+  - notebook
+  - jupyterlab
+  - jupytext
+  - nbstripout
+  - nbconvert
+  - nbdime
+  - nb-clean
+  - pip:
+      - black
+      - ruff
+      - isort
+      - tqdm
+      - pytest
+      - click
+      - python-dotenv
+      - pandas
+      - kaggle
+      - pyarrow
