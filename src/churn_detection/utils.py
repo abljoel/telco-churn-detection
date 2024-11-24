@@ -95,7 +95,6 @@ def get_dataset_info(df: pd.DataFrame) -> Dict[str, Any]:
     return info
 
 
-# Example of how to use the updated `get_dataset_info` function
 def display_dataset_info(df: pd.DataFrame) -> None:
     """
     Display the dataset information in a readable format.
@@ -133,3 +132,44 @@ def display_dataset_info(df: pd.DataFrame) -> None:
             print(f"{k} -> {v}")
     print("-----------------------------------")
     print(f"Number of duplicated rows: {info['duplicate_count']}")
+
+
+def get_distribution_info(df: pd.DataFrame) -> None:
+    """
+    Provides a comprehensive analysis of the distribution of data in a DataFrame.
+
+    This function prints out various statistical summaries and distribution analyses
+    for the numeric columns in the given DataFrame. It includes mean, median, standard
+    deviation, minimum, maximum, dispersion coefficients, kurtosis, and skewness.
+
+    Args:
+        df (pd.DataFrame): The DataFrame containing the data to be analyzed.
+
+    Returns:
+        None
+    """
+    numeric_cols = df.select_dtypes("number")
+    print("-----------------------------------")
+    print("Distribution analysis:")
+    print(numeric_cols.describe().T[["mean", "50%", "std"]])
+    print("-----------------------------------")
+    print("Variable ranges:")
+    print(numeric_cols.describe().T[["min", "max"]])
+    print("-----------------------------------")
+    print("Quartile dispersion coefficients:")
+    threshold = 10
+    target_cols = [col for col, count in numeric_cols.nunique().items() if count > threshold]
+    for var in target_cols:
+        var_q = numeric_cols[var].quantile(q=[0.25, 0.75]).tolist()
+        try:
+            var_qcod = (var_q[1] - var_q[0]) / (var_q[0] + var_q[1])
+        except ZeroDivisionError:
+            var_qcod = 0.0
+        print(f"{var} -> {var_qcod:.2f}")
+    print("-----------------------------------")
+    print("Kurtosis:")
+    print(numeric_cols.kurtosis().abs())
+    print("-----------------------------------")
+    print("Skewness:")
+    print(numeric_cols.skew().abs())
+    print()
