@@ -4,8 +4,51 @@ This module provides utility functions for analyzing and summarizing pandas Data
 including functions for finding duplicate rows and displaying metadata summaries.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, List, Union
 import pandas as pd
+import numpy as np
+from churn_detection.paths import TRANSFORMED_DATA_DIR
+
+
+VALID_DATASET_NAMES = {"train", "validation", "test"}
+
+
+def load_datasets(
+    *, names: List[str], as_df: bool = True
+) -> Union[List[pd.DataFrame], List[np.ndarray]]:
+    """
+    Load datasets from feather files.
+
+    Args:
+        names (List[str]): A list of dataset names. Must be one or more of 'train', 'validation',
+                           and 'test'.
+        as_df (bool, optional): If True, returns a list of DataFrames. If False, returns a list
+                                of NumPy arrays.
+
+    Returns:
+        Union[List[pd.DataFrame], List[np.ndarray]]: Loaded datasets as either DataFrames or NumPy
+                                                     arrays.
+
+    Raises:
+        ValueError: If no dataset names are provided or if any name is invalid.
+    """
+    if not names:
+        raise ValueError("No dataset name(s) provided.")
+
+    invalid_names = [name for name in names if name not in VALID_DATASET_NAMES]
+    if invalid_names:
+        raise ValueError(
+            f"Invalid dataset name(s) provided: {', '.join(invalid_names)}. Valid names are: "
+            f"{', '.join(VALID_DATASET_NAMES)}"
+        )
+
+    datasets = [
+        pd.read_feather(TRANSFORMED_DATA_DIR / f"{name}.feather") for name in names
+    ]
+
+    if as_df:
+        return datasets
+    return [df.values for df in datasets]
 
 
 def get_duplicate_count(df: pd.DataFrame) -> int:
@@ -158,7 +201,9 @@ def get_distribution_info(df: pd.DataFrame) -> None:
     print("-----------------------------------")
     print("Quartile dispersion coefficients:")
     threshold = 10
-    target_cols = [col for col, count in numeric_cols.nunique().items() if count > threshold]
+    target_cols = [
+        col for col, count in numeric_cols.nunique().items() if count > threshold
+    ]
     for var in target_cols:
         var_q = numeric_cols[var].quantile(q=[0.25, 0.75]).tolist()
         try:
