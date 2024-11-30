@@ -18,10 +18,11 @@ Available Functions:
 """
 
 import warnings
-from typing import Literal
+from typing import Literal, Any
 import matplotlib.pyplot as plt
 import pandas as pd
 from seaborn import pairplot, heatmap
+from sklearn.metrics import roc_curve, roc_auc_score
 import numpy as np
 import seaborn as sns
 from scipy.stats import chi2_contingency
@@ -312,4 +313,35 @@ def plot_cramer(df: pd.DataFrame, size: tuple = (12, 10)) -> None:
         cramer_table, annot=True, fmt=".2f", cmap="coolwarm", cbar=True, linewidths=0.5
     )
     plt.title("Cramer's V Correlation Heatmap")
+    plt.show()
+
+
+def plot_roc_curve(
+    model: Any,
+    X: Any,
+    y: Any,
+    average: Literal["micro", "macro", "samples", "weighted"] | None = "macro",
+) -> None:
+    """
+    Plot the ROC curve for a given model and dataset.
+
+    Parameters:
+    model (Any): Trained model that has a `predict_proba` method.
+    X (Any): Feature dataset, typically a NumPy array or pandas DataFrame.
+    y (Any): True labels, typically a NumPy array or pandas Series.
+
+    Returns:
+    None
+    """
+    y_probs = model.predict_proba(X)[:, 1]
+    fpr, tpr, _ = roc_curve(y, y_probs)
+    roc_auc = roc_auc_score(y, y_probs, average=average)
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color="blue", lw=2, label=f"ROC curve (AUC = {roc_auc:.2f})")
+    plt.plot([0, 1], [0, 1], color="gray", linestyle="--")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("Receiver Operating Characteristic (ROC) Curve")
+    plt.legend(loc="lower right")
+    plt.grid()
     plt.show()
