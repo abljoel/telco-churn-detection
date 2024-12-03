@@ -18,11 +18,16 @@ Available Functions:
 """
 
 import warnings
-from typing import Literal, Any
+from typing import Literal, Any, Union
 import matplotlib.pyplot as plt
 import pandas as pd
 from seaborn import pairplot, heatmap
-from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.metrics import (
+    roc_curve,
+    roc_auc_score,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+)
 import numpy as np
 import seaborn as sns
 from scipy.stats import chi2_contingency
@@ -262,10 +267,10 @@ def get_cramer_v(label: pd.Series, x: pd.Series, bias_correction: bool = True) -
     if label.shape[0] != x.shape[0]:
         raise ValueError("Input series must have the same length.")
 
-    confusion_matrix = pd.crosstab(label, x)
-    chi2 = chi2_contingency(confusion_matrix)[0]
-    n = confusion_matrix.sum().sum()
-    r, k = confusion_matrix.shape
+    confusion_table = pd.crosstab(label, x)
+    chi2 = chi2_contingency(confusion_table)[0]
+    n = confusion_table.sum().sum()
+    r, k = confusion_table.shape
     phi2 = chi2 / n
 
     if bias_correction:
@@ -344,4 +349,27 @@ def plot_roc_curve(
     plt.title("Receiver Operating Characteristic (ROC) Curve")
     plt.legend(loc="lower right")
     plt.grid()
+    plt.show()
+
+
+def plot_confusion_table(
+    y: Union[np.ndarray, pd.Series], y_pred: Union[np.ndarray, pd.Series]
+) -> None:
+    """
+    Display the confusion matrix for given predictions and true labels.
+
+    Args:
+        y (Union[np.ndarray, pd.Series]): True labels as a NumPy array or pandas Series.
+        y_pred (Union[np.ndarray, pd.Series]): Predicted labels as a NumPy array or pandas Series.
+
+    Raises:
+        ValueError: If `y` or `y_pred` are empty.
+    """
+    if y is None or len(y) == 0:
+        raise ValueError("The target labels 'y' cannot be empty.")
+
+    if y_pred is None or len(y_pred) == 0:
+        raise ValueError("The predicted labels 'y_pred' cannot be empty.")
+
+    ConfusionMatrixDisplay(confusion_matrix(y, y_pred, normalize="true")).plot()
     plt.show()
