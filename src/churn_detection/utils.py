@@ -218,3 +218,24 @@ def get_distribution_info(df: pd.DataFrame) -> None:
     print("Skewness:")
     print(numeric_cols.skew().abs())
     print()
+
+
+def get_feature_names(df: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """
+    Get the names of numeric and categorical variables from the DataFrame.
+
+    Args:
+        df (pd.DataFrame): The DataFrame containing the dataset.
+
+    Returns:
+        tuple[list[str], list[str]]: A tuple containing a list of numeric variable names and a
+                                     list of categorical variable names.
+    """
+    numeric_variables = ["tenure", "monthlycharges", "totalcharges"]
+
+    categorical_variables = [
+        var for var in df.columns 
+        if var not in numeric_variables 
+        and var != "churn"
+    ]
+    return numeric_variables, categorical_variables
