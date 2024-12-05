@@ -2,12 +2,13 @@
 Python module for model evaluation utilities.
 """
 
-from typing import Callable, Tuple, Union
+from typing import Tuple, Union
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.metrics import roc_auc_score, classification_report
 from sklearn.model_selection import RepeatedStratifiedKFold, cross_val_score
+from .preprocessing import split_data
 
 
 def display_roc_auc_score(
@@ -66,9 +67,6 @@ def display_clf_report(
 def validate_model_with_cv(
     model: BaseEstimator,
     train_data: Union[Tuple[pd.DataFrame, pd.Series], pd.DataFrame],
-    split_func: Callable[
-        [Union[pd.DataFrame, pd.Series]], Tuple[pd.DataFrame, pd.Series]
-    ],
     n_folds: int = 10,
     n_iter: int = 3,
     metric: str = "roc_auc",
@@ -87,12 +85,8 @@ def validate_model_with_cv(
             Training data which can either be:
             - A tuple containing feature matrix `X_train` and target vector `y_train`.
             - A full dataset `pd.DataFrame` that requires splitting into features and target.
-        split_func (Callable[[Union[pd.DataFrame, pd.Series]], Tuple[pd.DataFrame, pd.Series]]):
-            A function used to split the full training data into a feature matrix and a target
-            vector.
-            This function is used only if `train_data` is provided as a complete dataset.
         n_folds (int, optional): The number of splits for K-fold cross-validation. Defaults to 10.
-        n_iter (int, optional): The number of times cross-validation should be repeated. 
+        n_iter (int, optional): The number of times cross-validation should be repeated.
                                 Defaults to 3.
         metric (str, optional): Scoring metric to evaluate model performance. This should be a valid
                                 scoring parameter for scikit-learn's `cross_val_score`.
@@ -104,7 +98,7 @@ def validate_model_with_cv(
             - `std_dev` (float): The standard deviation of the cross-validation scores.
 
     Raises:
-        TypeError: If `split_func` returns data that is not a DataFrame/ndarray for features or 
+        TypeError: If `split_func` returns data that is not a DataFrame/ndarray for features or
                    Series/ndarray for the target.
     """
 
@@ -112,7 +106,7 @@ def validate_model_with_cv(
     if isinstance(train_data, tuple):
         X_train, y_train = train_data
     else:
-        X_train, y_train = split_func(train_data)
+        X_train, y_train = split_data(train_data)
 
     # Ensure the split function returns valid data types
     if not isinstance(X_train, (pd.DataFrame, np.ndarray)) or not isinstance(
