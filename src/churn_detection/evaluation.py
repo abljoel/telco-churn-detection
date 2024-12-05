@@ -90,7 +90,7 @@ def validate_model_with_cv(
                                 Defaults to 3.
         metric (str, optional): Scoring metric to evaluate model performance. This should be a valid
                                 scoring parameter for scikit-learn's `cross_val_score`.
-                                Defaults to "roc_auc".
+                                Defaults to "accuracy".
 
     Returns:
         Tuple[float, float]: A tuple containing:
