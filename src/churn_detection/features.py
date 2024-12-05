@@ -235,3 +235,24 @@ def create_pipe(prep: ColumnTransformer, model: BaseEstimator) -> Pipeline:
     """
     model = Pipeline(steps=[("processor", prep), ("estimator", model)])
     return model
+
+
+def engineer_features(
+    prep_df_X: pd.DataFrame, transforms: List[Tuple[str, Pipeline, List[str]]]
+) -> np.ndarray:
+    """
+    Applies feature engineering transformations to the provided DataFrame using a column
+    preprocessor.
+
+    Args:
+        prep_df_X (pd.DataFrame): The input DataFrame containing the features to preprocess.
+        transforms (Dict[str, Any]): A dictionary specifying transformations for each column.
+            The format of `transforms` should align with the requirements of the
+            `create_column_preprocessor` function.
+
+    Returns:
+        np.ndarray: The transformed feature matrix after applying preprocessing transformations.
+    """
+    preprocessor = create_column_preprocessor(transforms)
+    transformed_df_X = preprocessor.fit_transform(prep_df_X)
+    return transformed_df_X
