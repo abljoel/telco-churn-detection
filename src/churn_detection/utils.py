@@ -7,7 +7,7 @@ including functions for finding duplicate rows and displaying metadata summaries
 from typing import Dict, Any, List, Union
 import pandas as pd
 import numpy as np
-from churn_detection.paths import TRANSFORMED_DATA_DIR
+from .paths import TRANSFORMED_DATA_DIR
 
 
 VALID_DATASET_NAMES = {"train", "validation", "test"}
@@ -234,8 +234,8 @@ def get_feature_names(df: pd.DataFrame) -> tuple[list[str], list[str]]:
     numeric_variables = ["tenure", "monthlycharges", "totalcharges"]
 
     categorical_variables = [
-        var for var in df.columns 
-        if var not in numeric_variables 
+        var for var in df.columns
+        if var not in numeric_variables
         and var != "churn"
     ]
     return numeric_variables, categorical_variables
