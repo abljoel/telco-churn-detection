@@ -2,11 +2,12 @@
 Python module for model evaluation utilities.
 """
 
-from typing import Union
+from typing import Callable, Tuple, Union
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.metrics import roc_auc_score, classification_report
+from sklearn.model_selection import RepeatedStratifiedKFold, cross_val_score
 
 
 def display_roc_auc_score(
@@ -60,3 +61,77 @@ def display_clf_report(
         raise ValueError("The target labels 'y' cannot be empty.")
 
     print(classification_report(y, y_pred))
+
+
+def validate_model_with_cv(
+    model: BaseEstimator,
+    train_data: Union[Tuple[pd.DataFrame, pd.Series], pd.DataFrame],
+    split_func: Callable[
+        [Union[pd.DataFrame, pd.Series]], Tuple[pd.DataFrame, pd.Series]
+    ],
+    n_folds: int = 10,
+    n_iter: int = 3,
+    metric: str = "roc_auc",
+) -> Tuple[float, float]:
+    """Validates a model using repeated stratified K-fold cross-validation.
+
+    This function performs cross-validation on a given model using a repeated stratified
+    K-fold approach. It is designed for both scenarios where the data may already be split
+    into features (X) and target (y), or where a splitting function must be applied to
+    the complete training data.
+
+    Args:
+        model (BaseEstimator): The machine learning model or pipeline to be validated.
+            This should be an estimator compatible with scikit-learn's `fit` and `predict` methods.
+        train_data (Union[Tuple[pd.DataFrame, pd.Series], pd.DataFrame]):
+            Training data which can either be:
+            - A tuple containing feature matrix `X_train` and target vector `y_train`.
+            - A full dataset `pd.DataFrame` that requires splitting into features and target.
+        split_func (Callable[[Union[pd.DataFrame, pd.Series]], Tuple[pd.DataFrame, pd.Series]]):
+            A function used to split the full training data into a feature matrix and a target
+            vector.
+            This function is used only if `train_data` is provided as a complete dataset.
+        n_folds (int, optional): The number of splits for K-fold cross-validation. Defaults to 10.
+        n_iter (int, optional): The number of times cross-validation should be repeated. 
+                                Defaults to 3.
+        metric (str, optional): Scoring metric to evaluate model performance. This should be a valid
+                                scoring parameter for scikit-learn's `cross_val_score`.
+                                Defaults to "roc_auc".
+
+    Returns:
+        Tuple[float, float]: A tuple containing:
+            - `mean_score` (float): The mean of the cross-validation scores.
+            - `std_dev` (float): The standard deviation of the cross-validation scores.
+
+    Raises:
+        TypeError: If `split_func` returns data that is not a DataFrame/ndarray for features or 
+                   Series/ndarray for the target.
+    """
+
+    # Split the training data if required
+    if isinstance(train_data, tuple):
+        X_train, y_train = train_data
+    else:
+        X_train, y_train = split_func(train_data)
+
+    # Ensure the split function returns valid data types
+    if not isinstance(X_train, (pd.DataFrame, np.ndarray)) or not isinstance(
+        y_train, (pd.Series, np.ndarray)
+    ):
+        raise TypeError(
+            "The split function must return a DataFrame/ndarray for X and Series/ndarray for y."
+        )
+
+    # Set up the cross-validation strategy
+    kfold = RepeatedStratifiedKFold(
+        n_splits=n_folds, n_repeats=n_iter, random_state=123
+    )
+
+    # Calculate cross-validation scores
+    cv_results = cross_val_score(model, X_train, y_train, cv=kfold, scoring=metric)
+
+    # Output results
+    mean_score = cv_results.mean()
+    std_dev = cv_results.std()
+
+    return mean_score, std_dev
