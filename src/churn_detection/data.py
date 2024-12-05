@@ -112,5 +112,8 @@ def load_data(save: bool = False) -> pd.DataFrame:
             zip_file=zip_file,
             raw_data=raw_data,
         )
+    else:
+        subprocess.run(["cmd", "/c", "del", str(zip_file)], check=True)
+        subprocess.run(["cmd", "/c", "del", str(raw_data)], check=True)
 
     return data
