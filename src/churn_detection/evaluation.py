@@ -69,7 +69,7 @@ def validate_model_with_cv(
     train_data: Union[Tuple[pd.DataFrame, pd.Series], pd.DataFrame],
     n_folds: int = 10,
     n_iter: int = 3,
-    metric: str = "roc_auc",
+    metric: str = "accuracy",
 ) -> Tuple[float, float]:
     """Validates a model using repeated stratified K-fold cross-validation.
 
