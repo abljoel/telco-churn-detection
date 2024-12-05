@@ -11,8 +11,10 @@ import subprocess
 import zipfile
 import os
 from typing import NoReturn
+from pathlib import Path
 
 import pandas as pd
+from .paths import EXTERNAL_DATA_DIR
 
 
 def fetch_batch_data(
@@ -57,7 +59,7 @@ def save_batch_data(
         target_path (str | os.PathLike): The path where the DataFrame should be saved.
         zip_file (str | os.PathLike): The path to the zip file that was downloaded.
         raw_data (str | os.PathLike): The path to the raw CSV file that was extracted.
-        file_format (str): The format in which to save the DataFrame. Supported formats 
+        file_format (str): The format in which to save the DataFrame. Supported formats
                            are 'csv' or 'feather'. Defaults to 'feather'.
 
     Raises:
@@ -78,3 +80,37 @@ def save_batch_data(
         raise ValueError(
             f"Invalid file format '{file_format}'. Supported formats are 'csv' or 'feather'."
         )
+
+
+
+def load_data(save: bool = False) -> pd.DataFrame:
+    """
+    Loads customer churn data from Kaggle, with an option to save the data in the specified format.
+
+    Args:
+        save (bool): If True, saves the downloaded data using the save_batch_data function.
+                     Defaults to True.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the customer churn data.
+    """
+    kaggle_target_dataset = "blastchar/telco-customer-churn"
+    raw_data = Path("WA_Fn-UseC_-Telco-Customer-Churn.csv")
+    zip_file = Path("telco-customer-churn.zip")
+
+    data = fetch_batch_data(
+        target=kaggle_target_dataset,
+        cwd_path=Path().cwd(),
+        zip_file=zip_file,
+        raw_data=raw_data,
+    )
+
+    if save:
+        save_batch_data(
+            df=data,
+            target_path=EXTERNAL_DATA_DIR,
+            zip_file=zip_file,
+            raw_data=raw_data,
+        )
+
+    return data
