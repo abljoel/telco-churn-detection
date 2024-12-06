@@ -1,3 +1,5 @@
 # Telco Customer Churn Prediction
 
-This project aims to develop a machine learning model that predicts the likelihood of customer churn in the telecommunication industry. By analyzing customer behavior and service usage patterns, the model helps identify at-risk customers, enabling proactive retention strategies to reduce churn rates.
+## Overview
+
+This project focuses on detecting customer churn for a telecom company using machine learning techniques. The goal is to help the company identify at-risk customers and implement proactive strategies to retain them.
