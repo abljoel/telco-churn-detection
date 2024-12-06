@@ -1,7 +1,6 @@
 """Feature Pipeline Utilities"""
 
 from typing import List, Tuple, Union
-
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -176,6 +175,85 @@ class SimpleCategoryEncoder(BaseEstimator, TransformerMixin):
                 X_out.iloc[:, col] if isinstance(X_out, pd.DataFrame) else X_out[:, col]
             )
         return X_out
+
+
+class Transformation:
+    """
+    A class to represent a named transformer pipeline, which encapsulates a series of transformation
+    steps and the target variables.
+    """
+
+    def __init__(
+        self, name: str, steps: List[Tuple[str, TransformerMixin]], variables: List[str]
+    ):
+        """
+        Create a named transformer pipeline.
+
+        Parameters:
+        name: str
+            The name of the transformer.
+        steps: List[Tuple[str, TransformerMixin]]
+            A list of steps for the transformer pipeline.
+        variables: List[str]
+            A list of target variables to be included in the pipeline.
+        """
+        self.name = name
+        self.steps = steps
+        self.variables = variables
+        self.pipeline = Pipeline(steps=steps)
+
+    def get_tuple(self) -> Tuple[str, Pipeline, List[str]]:
+        """
+        Get the tuple representation of the transformation.
+
+        Returns:
+        Tuple[str, Pipeline, List[str]]
+            A tuple containing the name, the transformer pipeline, and the list of target variables.
+        """
+        return self.name, self.pipeline, self.variables
+
+
+class ColumnPreprocessor:
+    """
+    A class to manage and create a column transformer preprocessor by adding various transformations
+    for different sets of variables.
+    """
+
+    def __init__(self):
+        """
+        Initialize an empty list of transformations.
+        """
+        self.transformations = []
+
+    def add_transformation(self, transformation: Transformation):
+        """
+        Add a transformation to the list of transformations.
+
+        Parameters:
+        transformation: Transformation
+            The transformation to be added.
+        """
+        self.transformations.append(transformation.get_tuple())
+
+    def create_preprocessor(self) -> ColumnTransformer:
+        """
+        Create a column transformer preprocessor.
+
+        Returns:
+        ColumnTransformer
+            A column transformer for preprocessing different columns.
+        """
+        return ColumnTransformer(transformers=self.transformations)
+
+    def get_transformations(self) -> List[Tuple[str, Pipeline, List[str]]]:
+        """
+        Get the list of transformations.
+
+        Returns:
+        List[Tuple[str, Pipeline, List[str]]]
+            The list of transformations added to the preprocessor.
+        """
+        return self.transformations
 
 
 def add_transformation(
