@@ -177,6 +177,74 @@ class SimpleCategoryEncoder(BaseEstimator, TransformerMixin):
         return X_out
 
 
+class FeatureRemover(BaseEstimator, TransformerMixin):
+    """
+    A transformer that removes specified features from the dataset.
+    """
+
+    def __init__(self, features_to_remove: Union[str, List[str]]) -> None:
+        """
+        Initialize the transformer with the features to remove.
+
+        Parameters:
+        features_to_remove: Union[str, List[str]]
+            The name or list of names of the features to remove from the dataset.
+        """
+        if isinstance(features_to_remove, str):
+            self.features_to_remove = [features_to_remove]
+        elif isinstance(features_to_remove, list):
+            self.features_to_remove = features_to_remove
+        else:
+            raise ValueError("features_to_remove must be a string or a list of strings")
+
+    def fit(
+        self,
+        X: Union[pd.DataFrame, np.ndarray] = None,
+        y: Union[pd.Series, np.ndarray] = None,
+    ) -> "FeatureRemover":
+        """
+        Fit the transformer. This method does not learn anything as it's used for column removal.
+
+        Parameters:
+        X: Union[pd.DataFrame, np.ndarray], optional
+            Input features (DataFrame or ndarray).
+        y: Union[pd.Series, np.ndarray], optional
+            Target labels (ignored).
+
+        Returns:
+        self
+        """
+        # No fitting required as we are only removing features
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transform the input data by removing the specified features.
+
+        Parameters:
+        X: pd.DataFrame
+            Input features to be transformed.
+
+        Returns:
+        X_transformed: pd.DataFrame
+            The input data with the specified features removed.
+
+        Raises:
+        TypeError: If input is not a pandas DataFrame.
+        KeyError: If any feature to remove is not in the DataFrame.
+        """
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("Input should be a pandas DataFrame")
+
+        missing_features = [
+            feature for feature in self.features_to_remove if feature not in X.columns
+        ]
+        if missing_features:
+            raise KeyError(f"Features {missing_features} not found in the dataset")
+
+        return X.drop(columns=self.features_to_remove)
+
+
 class Transformation:
     """
     A class to represent a named transformer pipeline, which encapsulates a series of transformation
