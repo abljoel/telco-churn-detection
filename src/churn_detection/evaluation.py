@@ -70,36 +70,41 @@ def validate_model_with_cv(
     n_folds: int = 10,
     n_iter: int = 3,
     metric: str = "accuracy",
+    results: bool = False,
 ) -> Tuple[float, float]:
     """Validates a model using repeated stratified K-fold cross-validation.
 
     This function performs cross-validation on a given model using a repeated stratified
-    K-fold approach. It is designed for both scenarios where the data may already be split
-    into features (X) and target (y), or where a splitting function must be applied to
-    the complete training data.
+    K-fold approach. It supports both scenarios where the data is already split into
+    features (X) and target (y), or where a splitting function is required to extract
+    features and target from a full dataset.
 
     Args:
         model (BaseEstimator): The machine learning model or pipeline to be validated.
             This should be an estimator compatible with scikit-learn's `fit` and `predict` methods.
         train_data (Union[Tuple[pd.DataFrame, pd.Series], pd.DataFrame]):
             Training data which can either be:
-            - A tuple containing feature matrix `X_train` and target vector `y_train`.
-            - A full dataset `pd.DataFrame` that requires splitting into features and target.
+            - A tuple containing the feature matrix `X_train` and target vector `y_train`.
+            - A full dataset `pd.DataFrame` requiring splitting into features and target.
         n_folds (int, optional): The number of splits for K-fold cross-validation. Defaults to 10.
-        n_iter (int, optional): The number of times cross-validation should be repeated.
+        n_iter (int, optional): The number of times cross-validation should be repeated. 
                                 Defaults to 3.
         metric (str, optional): Scoring metric to evaluate model performance. This should be a valid
-                                scoring parameter for scikit-learn's `cross_val_score`.
+                                scoring parameter for scikit-learn's `cross_val_score`. 
                                 Defaults to "accuracy".
+        results (bool, optional): If `True`, returns the list of cross-validation scores. 
+                                  Defaults to `False`.
 
     Returns:
-        Tuple[float, float]: A tuple containing:
-            - `mean_score` (float): The mean of the cross-validation scores.
-            - `std_dev` (float): The standard deviation of the cross-validation scores.
+        Union[Tuple[float, float], List[float]]: Depending on the value of the `results` parameter:
+            - If `results` is `False`: A tuple containing:
+                - `mean_score` (float): The mean of the cross-validation scores.
+                - `std_dev` (float): The standard deviation of the cross-validation scores.
+            - If `results` is `True`: A list of cross-validation scores.
 
     Raises:
-        TypeError: If `split_func` returns data that is not a DataFrame/ndarray for features or
-                   Series/ndarray for the target.
+        TypeError: If `train_data` is not correctly formatted or if the split function
+                   returns invalid data types.
     """
 
     # Split the training data if required
@@ -123,6 +128,8 @@ def validate_model_with_cv(
 
     # Calculate cross-validation scores
     cv_results = cross_val_score(model, X_train, y_train, cv=kfold, scoring=metric)
+    if results:
+        return cv_results
 
     # Output results
     mean_score = cv_results.mean()
