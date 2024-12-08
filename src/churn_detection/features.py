@@ -177,72 +177,194 @@ class SimpleCategoryEncoder(BaseEstimator, TransformerMixin):
         return X_out
 
 
-class FeatureRemover(BaseEstimator, TransformerMixin):
+# class FeatureRemover(BaseEstimator, TransformerMixin):
+#     """
+#     A transformer that removes specified features from the dataset.
+#     """
+
+#     def __init__(self, features_to_remove: Union[str, List[str]]) -> None:
+#         """
+#         Initialize the transformer with the features to remove.
+
+#         Parameters:
+#         features_to_remove: Union[str, List[str]]
+#             The name or list of names of the features to remove from the dataset.
+#         """
+#         if isinstance(features_to_remove, str):
+#             self.features_to_remove = [features_to_remove]
+#         elif isinstance(features_to_remove, list):
+#             self.features_to_remove = features_to_remove
+#         else:
+#             raise ValueError("features_to_remove must be a string or a list of strings")
+
+#     def fit(
+#         self,
+#         X: Union[pd.DataFrame, np.ndarray] = None,
+#         y: Union[pd.Series, np.ndarray] = None,
+#     ) -> "FeatureRemover":
+#         """
+#         Fit the transformer. This method does not learn anything as it's used for column removal.
+
+#         Parameters:
+#         X: Union[pd.DataFrame, np.ndarray], optional
+#             Input features (DataFrame or ndarray).
+#         y: Union[pd.Series, np.ndarray], optional
+#             Target labels (ignored).
+
+#         Returns:
+#         self
+#         """
+#         # No fitting required as we are only removing features
+#         return self
+
+#     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+#         """
+#         Transform the input data by removing the specified features.
+
+#         Parameters:
+#         X: pd.DataFrame
+#             Input features to be transformed.
+
+#         Returns:
+#         X_transformed: pd.DataFrame
+#             The input data with the specified features removed.
+
+#         Raises:
+#         TypeError: If input is not a pandas DataFrame.
+#         KeyError: If any feature to remove is not in the DataFrame.
+#         """
+#         if not isinstance(X, pd.DataFrame):
+#             raise TypeError("Input should be a pandas DataFrame")
+
+#         missing_features = [
+#             feature for feature in self.features_to_remove if feature not in X.columns
+#         ]
+#         if missing_features:
+#             raise KeyError(f"Features {missing_features} not found in the dataset")
+
+#         return X.drop(columns=self.features_to_remove)
+
+
+class InteractionStrengthExtractor(BaseEstimator, TransformerMixin):
     """
-    A transformer that removes specified features from the dataset.
+    A custom scikit-learn transformer to compute and optionally encode interaction strength
+    between two categorical variables based on the mean value of a target variable.
+
+    This transformer allows you to:
+    - Compute interaction strength for pairs of categorical variables.
+    - Optionally apply ordinal encoding to the computed interaction strength values.
+    - Integrate the computed interaction strength into the input DataFrame.
+
+    Attributes:
+        cat_column_1 (str): Name of the first categorical column.
+        cat_column_2 (str): Name of the second categorical column.
+        target_column (str): Name of the target column used for computing interaction strength.
+        ordinal_encode (bool): Whether to apply ordinal encoding to interaction strength values.
+        interaction_strength_ (pd.DataFrame): DataFrame containing the computed interaction strength
+                                              values.
+        label_encoder_ (LabelEncoder or None): LabelEncoder instance if ordinal encoding is applied.
+        strength_col_name_ (str): Name of the generated interaction strength column.
     """
 
-    def __init__(self, features_to_remove: Union[str, List[str]]) -> None:
-        """
-        Initialize the transformer with the features to remove.
-
-        Parameters:
-        features_to_remove: Union[str, List[str]]
-            The name or list of names of the features to remove from the dataset.
-        """
-        if isinstance(features_to_remove, str):
-            self.features_to_remove = [features_to_remove]
-        elif isinstance(features_to_remove, list):
-            self.features_to_remove = features_to_remove
-        else:
-            raise ValueError("features_to_remove must be a string or a list of strings")
-
-    def fit(
+    def __init__(
         self,
-        X: Union[pd.DataFrame, np.ndarray] = None,
-        y: Union[pd.Series, np.ndarray] = None,
-    ) -> "FeatureRemover":
+        cat_column_1: str,
+        cat_column_2: str,
+        target_column: str = "churn",
+        ordinal_encode: bool = False,
+    ):
         """
-        Fit the transformer. This method does not learn anything as it's used for column removal.
+        Initializes the InteractionStrengthExtractor.
 
-        Parameters:
-        X: Union[pd.DataFrame, np.ndarray], optional
-            Input features (DataFrame or ndarray).
-        y: Union[pd.Series, np.ndarray], optional
-            Target labels (ignored).
+        Args:
+            cat_column_1 (str): Name of the first categorical column.
+            cat_column_2 (str): Name of the second categorical column.
+            target_column (str): Name of the target column (e.g., churn).
+            ordinal_encode (bool): Whether to apply ordinal encoding to interaction strength values.
+        """
+        self.cat_column_1 = cat_column_1
+        self.cat_column_2 = cat_column_2
+        self.target_column = target_column
+        self.ordinal_encode = ordinal_encode
+        self.interaction_strength_ = None
+        self.label_encoder_ = LabelEncoder() if ordinal_encode else None
+        self.strength_col_name_ = None
+
+    def fit(self, X, y=None):
+        """
+        Compute interaction strength as the mean target value for each combination
+        of the two categorical columns.
+
+        Args:
+            X (pd.DataFrame): Input dataframe containing the categorical columns and target column.
+            y (pd.Series, optional): Not used (included for compatibility).
 
         Returns:
-        self
+            self
         """
-        # No fitting required as we are only removing features
+        if not all(
+            col in X.columns
+            for col in [self.cat_column_1, self.cat_column_2, self.target_column]
+        ):
+            raise ValueError(
+                f"Columns {self.cat_column_1}, {self.cat_column_2}, and {self.target_column} "
+                f"must be in the input DataFrame."
+            )
+
+        self.strength_col_name_ = f"{self.cat_column_1}_{self.cat_column_2}_strength"
+        self.interaction_strength_ = (
+            X.groupby([self.cat_column_1, self.cat_column_2])[self.target_column]
+            .mean()
+            .reset_index()
+        )
+        self.interaction_strength_.rename(
+            columns={self.target_column: self.strength_col_name_}, inplace=True
+        )
+
+        if self.ordinal_encode:
+            self.interaction_strength_[self.strength_col_name_] = (
+                self.label_encoder_.fit_transform(
+                    self.interaction_strength_[self.strength_col_name_]
+                )
+            )
+
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+    def transform(self, X):
         """
-        Transform the input data by removing the specified features.
+        Merge the interaction strength information into the input DataFrame.
 
-        Parameters:
-        X: pd.DataFrame
-            Input features to be transformed.
+        Args:
+            X (pd.DataFrame): Input dataframe containing the categorical columns.
 
         Returns:
-        X_transformed: pd.DataFrame
-            The input data with the specified features removed.
-
-        Raises:
-        TypeError: If input is not a pandas DataFrame.
-        KeyError: If any feature to remove is not in the DataFrame.
+            pd.DataFrame: Transformed dataframe with an additional interaction strength column.
         """
-        if not isinstance(X, pd.DataFrame):
-            raise TypeError("Input should be a pandas DataFrame")
+        if self.interaction_strength_ is None:
+            raise RuntimeError(
+                "The transformer has not been fitted yet. Call 'fit' before 'transform'."
+            )
 
-        missing_features = [
-            feature for feature in self.features_to_remove if feature not in X.columns
-        ]
-        if missing_features:
-            raise KeyError(f"Features {missing_features} not found in the dataset")
+        X_transformed = X.merge(
+            self.interaction_strength_,
+            on=[self.cat_column_1, self.cat_column_2],
+            how="left",
+        )
+        return X_transformed
 
-        return X.drop(columns=self.features_to_remove)
+    def get_strength_col_name(self):
+        """
+        Get the name of the interaction strength column.
+
+        Returns:
+            str: Name of the interaction strength column.
+        """
+        if self.strength_col_name_ is None:
+            raise RuntimeError(
+                "The transformer has not been fitted yet. Call 'fit' before accessing the "
+                "strength column name."
+            )
+        return self.strength_col_name_
 
 
 class Transformation:
