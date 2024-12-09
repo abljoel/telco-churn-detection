@@ -1,6 +1,6 @@
 """Feature Pipeline Utilities"""
 
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -365,6 +365,64 @@ class InteractionStrengthExtractor(BaseEstimator, TransformerMixin):
                 "strength column name."
             )
         return self.strength_col_name_
+
+
+class FeatureConcatenator(BaseEstimator, TransformerMixin):
+    def __init__(self, feature_pairs: List[Tuple[str, str]]) -> None:
+        """
+        Custom Transformer for creating interaction features by concatenating pairs of categorical 
+        variables.
+
+        Parameters:
+        - feature_pairs: List of tuples, where each tuple contains two feature names to concatenate.
+          Example: [("feature1", "feature2"), ("feature3", "feature4")]
+        """
+        self.feature_pairs = feature_pairs
+        self.new_feature_names = []
+
+    def fit(
+        self, X: pd.DataFrame, y: Optional[pd.Series] = None
+    ) -> "FeatureConcatenator":
+        """
+        Fit method, does nothing as this transformer doesn't require fitting.
+
+        Parameters:
+        - X: Input DataFrame.
+        - y: Optional target variable, not used.
+
+        Returns:
+        - self: Returns the instance itself.
+        """
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transforms the dataset by adding concatenated interaction features.
+
+        Parameters:
+        - X: Input DataFrame
+
+        Returns:
+        - Transformed DataFrame with new concatenated features added.
+        """
+        X = X.copy()
+        self.new_feature_names = []  # Reset feature names
+        for feature1, feature2 in self.feature_pairs:
+            new_feature_name = f"{feature1}_{feature2}_concat"
+            self.new_feature_names.append(new_feature_name)
+            X[new_feature_name] = (
+                X[feature1].astype(str) + "_" + X[feature2].astype(str)
+            )
+        return X
+
+    def get_new_feature_names(self) -> List[str]:
+        """
+        Get the names of the newly created concatenated features.
+
+        Returns:
+        - List of new feature names.
+        """
+        return self.new_feature_names
 
 
 class Transformation:
