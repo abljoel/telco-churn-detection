@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.metrics import roc_auc_score, classification_report
-from sklearn.model_selection import RepeatedStratifiedKFold, cross_val_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 from .preprocessing import split_data
 
 
@@ -68,7 +68,6 @@ def validate_model_with_cv(
     model: BaseEstimator,
     train_data: Union[Tuple[pd.DataFrame, pd.Series], pd.DataFrame],
     n_folds: int = 10,
-    n_iter: int = 3,
     metric: str = "accuracy",
     results: bool = False,
 ) -> Tuple[float, float]:
@@ -87,12 +86,10 @@ def validate_model_with_cv(
             - A tuple containing the feature matrix `X_train` and target vector `y_train`.
             - A full dataset `pd.DataFrame` requiring splitting into features and target.
         n_folds (int, optional): The number of splits for K-fold cross-validation. Defaults to 10.
-        n_iter (int, optional): The number of times cross-validation should be repeated. 
-                                Defaults to 3.
         metric (str, optional): Scoring metric to evaluate model performance. This should be a valid
-                                scoring parameter for scikit-learn's `cross_val_score`. 
+                                scoring parameter for scikit-learn's `cross_val_score`.
                                 Defaults to "accuracy".
-        results (bool, optional): If `True`, returns the list of cross-validation scores. 
+        results (bool, optional): If `True`, returns the list of cross-validation scores.
                                   Defaults to `False`.
 
     Returns:
@@ -122,9 +119,7 @@ def validate_model_with_cv(
         )
 
     # Set up the cross-validation strategy
-    kfold = RepeatedStratifiedKFold(
-        n_splits=n_folds, n_repeats=n_iter, random_state=123
-    )
+    kfold = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=123)
 
     # Calculate cross-validation scores
     cv_results = cross_val_score(model, X_train, y_train, cv=kfold, scoring=metric)
