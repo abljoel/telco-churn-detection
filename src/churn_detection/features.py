@@ -370,7 +370,7 @@ class InteractionStrengthExtractor(BaseEstimator, TransformerMixin):
 class FeatureConcatenator(BaseEstimator, TransformerMixin):
     def __init__(self, feature_pairs: List[Tuple[str, str]]) -> None:
         """
-        Custom Transformer for creating interaction features by concatenating pairs of categorical 
+        Custom Transformer for creating interaction features by concatenating pairs of categorical
         variables.
 
         Parameters:
@@ -423,6 +423,69 @@ class FeatureConcatenator(BaseEstimator, TransformerMixin):
         - List of new feature names.
         """
         return self.new_feature_names
+
+
+class RareCategoryEncoder(BaseEstimator, TransformerMixin):
+    def __init__(self, tol: float = 0.02, replace_with: str = "Rare") -> None:
+        """
+        Transformer to encode rare categories in categorical features by replacing
+        them with a specified value.
+
+        Args:
+            tol (float): The minimum frequency (proportion) for a category to be considered 
+                         frequent.
+            replace_with (str): The value to replace rare categories with.
+        """
+        self.tol = tol
+        self.replace_with = replace_with
+
+    def fit(
+        self, X: Union[pd.DataFrame, np.ndarray], y: Optional[pd.Series] = None
+    ) -> "RareCategoryEncoder":
+        """
+        Fit method does nothing as this transformer doesn't require fitting.
+
+        Args:
+            X (Union[pd.DataFrame, np.ndarray]): Input data.
+            y (Optional[pd.Series]): Target variable, not used.
+
+        Returns:
+            RareCategoryEncoder: The fitted instance of the transformer.
+        """
+        return self
+
+    def transform(
+        self, X: Union[pd.DataFrame, np.ndarray]
+    ) -> Union[pd.DataFrame, np.ndarray]:
+        """
+        Transform the dataset by encoding rare categories.
+
+        Args:
+            X (Union[pd.DataFrame, np.ndarray]): Input data.
+
+        Returns:
+            Union[pd.DataFrame, np.ndarray]: Transformed data with rare categories replaced.
+        """
+        if not isinstance(X, (pd.DataFrame, np.ndarray)):
+            raise TypeError("Input should be a pandas DataFrame or a numpy ndarray.")
+
+        if isinstance(X, np.ndarray):
+            X = pd.DataFrame(X, columns=[f"feat{i}" for i in range(X.shape[1])])
+
+        if X.ndim != 2:
+            raise ValueError("Input data must be 2-dimensional.")
+
+        X = X.copy()
+
+        for feature in X.columns:
+            freqs = X[feature].value_counts(normalize=True)
+            frequent_categories = freqs[freqs >= self.tol].index
+
+            X[feature] = np.where(
+                X[feature].isin(frequent_categories), X[feature], self.replace_with
+            )
+
+        return X.values if isinstance(X, pd.DataFrame) else X
 
 
 class Transformation:
