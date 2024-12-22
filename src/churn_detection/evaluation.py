@@ -6,7 +6,11 @@ from typing import Tuple, Union
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
-from sklearn.metrics import roc_auc_score, classification_report
+from sklearn.metrics import (
+    roc_auc_score,
+    classification_report,
+    average_precision_score,
+)
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from .preprocessing import split_data
 
@@ -40,6 +44,45 @@ def display_roc_auc_score(
     y_pred = model.predict(X)
     roc_auc = roc_auc_score(y, y_pred)
     print(f"ROC AUC score: {roc_auc:.2f}")
+
+
+def display_pr_auc_score(
+    model: BaseEstimator,
+    X: Union[np.ndarray, pd.DataFrame],
+    y: Union[np.ndarray, pd.Series],
+) -> None:
+    """
+    Display the Precision-Recall AUC (PR AUC) score for a given model and dataset.
+
+    Args:
+        model (BaseEstimator): A scikit-learn-like model that implements a predict_proba or
+                               decision_function method.
+        X (Union[np.ndarray, pd.DataFrame]): Features as a NumPy array or pandas DataFrame.
+        y (Union[np.ndarray, pd.Series]): True labels as a NumPy array or pandas Series.
+
+    Raises:
+        ValueError: If the model does not have a `predict_proba` or `decision_function` method.
+        ValueError: If `X` or `y` are empty.
+    """
+    if not (hasattr(model, "predict_proba") or hasattr(model, "decision_function")):
+        raise ValueError(
+            "The provided model must have a `predict_proba` or `decision_function` method to "
+            "calculate probabilities."
+        )
+
+    if X is None or len(X) == 0:
+        raise ValueError("The input feature data 'X' cannot be empty.")
+
+    if y is None or len(y) == 0:
+        raise ValueError("The target labels 'y' cannot be empty.")
+
+    if hasattr(model, "predict_proba"):
+        y_scores = model.predict_proba(X)[:, 1]
+    else:
+        y_scores = model.decision_function(X)
+
+    pr_auc = average_precision_score(y, y_scores)
+    print(f"Precision-Recall AUC score: {pr_auc:.2f}")
 
 
 def display_clf_report(
