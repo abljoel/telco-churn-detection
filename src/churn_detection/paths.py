@@ -8,6 +8,8 @@ DATA_DIR = PARENT_DIR / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 TRANSFORMED_DATA_DIR = DATA_DIR / "processed"
 EXTERNAL_DATA_DIR = DATA_DIR / "external"
+OUTPUTS_DIR = PARENT_DIR / "outputs"
+EXPERIMENT_DIR = OUTPUTS_DIR / "experiments"
 
 if not Path(DATA_DIR).exists():
     os.mkdir(DATA_DIR)
