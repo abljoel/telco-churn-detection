@@ -1,0 +1,22 @@
+feature_engineering:
+  type: column_preprocessor
+  params:
+    numerical:
+      name: continuous
+      variables: []
+      steps:
+        - []
+    categorical:
+      name: discrete
+      variables: []
+      steps:
+        - []
+
+model:
+  type: logistic_regression
+  params:
+    random_state: 0
+
+metrics:
+  - f1
+  - recall
