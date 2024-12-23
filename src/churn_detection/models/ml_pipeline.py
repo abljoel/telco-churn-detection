@@ -2,9 +2,26 @@
 
 from typing import List, Dict, Callable, Any
 import numpy as np
-from sklearn.metrics import f1_score, recall_score
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    average_precision_score,
+)
 from .base_model import BaseModel, BaseFeatureEngineer, ColumnPreprocessorFeatures
 from .linear_classifier import SklearnModel
+
+
+METRIC_MAP = {
+    "accuracy": accuracy_score,
+    "f1": f1_score,
+    "precision": precision_score,
+    "recall": recall_score,
+    "roc_auc": roc_auc_score,
+    "pr_auc": average_precision_score,
+}
 
 
 class MLPipeline:
@@ -85,19 +102,30 @@ class MLPipeline:
 
 def create_pipeline(config: Dict[str, Any]) -> MLPipeline:
     """
-    Create an MLPipeline instance from a configuration dictionary.
+    Creates and configures a machine learning pipeline based on a provided configuration.
+
+    This function reads the configuration dictionary to initialize feature engineering steps,
+    the machine learning model, and evaluation metrics for the pipeline. The pipeline is built
+    with modular components that can be dynamically adapted based on the configuration settings.
 
     Args:
-        config (Dict[str, Any]): Configuration dictionary containing feature engineering,
-        model, and metric specifications.
+        config (Dict[str, Any]): A dictionary containing the pipeline configuration. It should include:
+            - `feature_engineering`: A dictionary with:
+                - `type` (str): The type of feature engineering (e.g., "column_preprocessor").
+                - `params` (Dict): Parameters for feature engineering, including variable types and steps.
+            - `model`: A dictionary with:
+                - `type` (str): The type of model (e.g., "logistic_regression").
+                - `params` (Dict): Model-specific parameters.
+            - `metrics` (List[str]): A list of metric labels to evaluate the model. Supported labels include:
+                - "accuracy", "f1", "precision", "recall", "roc_auc", "pr_auc".
 
     Returns:
-        MLPipeline: Configured machine learning pipeline.
+        MLPipeline: A configured machine learning pipeline object ready for training and evaluation.
 
     Raises:
-        ValueError: If an unknown feature engineering type is specified in the config.
+        ValueError: If the feature engineering type is unsupported.
+        ValueError: If no valid metrics are found in the configuration.
     """
-    # Create feature engineers
     feature_engineering_config = config.get("feature_engineering", {})
     feature_engineer_type = feature_engineering_config.get("type")
 
@@ -108,22 +136,15 @@ def create_pipeline(config: Dict[str, Any]) -> MLPipeline:
     else:
         raise ValueError(f"Unknown feature engineering type: {feature_engineer_type}")
 
-    # Create model
     model = SklearnModel(config.get("model"))
 
-    # Define metrics
+    metric_labels = config.get("metrics", [])
     metrics = {
-        metric_name: metric_func
-        for metric_name, metric_func in zip(
-            config.get("metrics", ["f1", "recall"]),
-            [
-                f1_score,
-                lambda y_true, y_pred: recall_score(
-                    y_true, y_pred, pos_label=1, average="binary"
-                ),
-            ],
-        )
+        label: METRIC_MAP[label] for label in metric_labels if label in METRIC_MAP
     }
+
+    if not metrics:
+        raise ValueError("No valid metrics found in configuration.")
 
     return MLPipeline(
         feature_engineers=[feature_engineer], model=model, metrics=metrics
