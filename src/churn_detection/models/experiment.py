@@ -2,85 +2,77 @@
 
 import json
 from datetime import datetime
-import os
-from typing import Dict, List, Optional, Any, Union
+import logging
+from typing import Dict, List, Optional, Any
+import sys
 import pandas as pd
+import numpy as np
+import sklearn
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
-from ..paths import EXPERIMENT_DIR
+from sklearn.base import BaseEstimator
+from joblib import dump, load
+from ..output_manager import OutputManager
+from ..paths import PARENT_DIR
 
 
 class ExperimentManager:
     """
-    A class to manage machine learning experiments, including:
-    - Hyperparameter tuning
-    - Result tracking
-    - Experiment comparison
+    Manages machine learning experiments, including hyperparameter tuning,
+    result tracking, and experiment comparison.
+
+    Attributes:
+        base_pipeline (BaseEstimator): The base pipeline to use for experiments.
+        experiment_name (str): Name of the experiment.
+        output_manager (OutputManager): Manages experiment output.
+        experiments (Dict[str, Any]): Stores details of all experiments.
+        logger (Optional[logging.Logger]): Logger for experiment-related messages.
     """
 
     def __init__(
-        self, base_pipeline: Any, experiment_name: str, save_dir: str = EXPERIMENT_DIR
-    ):
-        """
-        Initialize the ExperimentManager.
-
-        Args:
-            base_pipeline (Any): The base pipeline containing feature engineers and model.
-            experiment_name (str): Name of the experiment.
-            save_dir (str): Directory to save experiment results.
-        """
+        self,
+        base_pipeline: BaseEstimator,
+        experiment_name: str,
+        project_root: Optional[str] = PARENT_DIR,
+        enable_logging: bool = True,
+        enable_model_saving: bool = True,
+    ) -> None:
+        self.output_manager = OutputManager(
+            project_root=project_root,
+            enable_logging=enable_logging,
+            enable_model_saving=enable_model_saving,
+        )
         self.base_pipeline = base_pipeline
         self.experiment_name = experiment_name
-        self.save_dir = save_dir
-        self.experiments: Dict[str, Dict[str, Any]] = {}
-        self._setup_save_directory()
-
-    def _setup_save_directory(self) -> None:
-        """Create directory for saving experiment results."""
-        os.makedirs(self.save_dir, exist_ok=True)
+        self.experiments: Dict[str, Any] = {}
+        self.logger = (
+            logging.getLogger(f"experiment_manager.{experiment_name}")
+            if enable_logging
+            else None
+        )
 
     def _create_experiment_id(self) -> str:
-        """Create unique experiment ID based on timestamp."""
+        """Generates a unique experiment ID based on the current timestamp."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"{self.experiment_name}_{timestamp}"
 
-    def _add_param_prefix(self, params: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-        """Add prefix to parameter names if not already present.
-
-        Args:
-            params (Dict[str, Any]): Original parameter dictionary.
-            prefix (str): Prefix to add.
-
-        Returns:
-            Dict[str, Any]: Updated parameter dictionary with prefixes.
-        """
+    def _get_experiment_metadata(self) -> Dict[str, Any]:
+        """Retrieves metadata for the experiment."""
         return {
-            (f"{prefix}__{key}" if not key.startswith(f"{prefix}__") else key): value
-            for key, value in params.items()
-        }
-
-    def _strip_param_prefix(
-        self, params: Dict[str, Any], prefix: str
-    ) -> Dict[str, Any]:
-        """Remove prefix from parameter names.
-
-        Args:
-            params (Dict[str, Any]): Parameter dictionary with prefixes.
-            prefix (str): Prefix to remove.
-
-        Returns:
-            Dict[str, Any]: Updated parameter dictionary without prefixes.
-        """
-        prefix_str = f"{prefix}__"
-        return {
-            (key[len(prefix_str) :] if key.startswith(prefix_str) else key): value
-            for key, value in params.items()
+            "timestamp": datetime.now().isoformat(),
+            "experiment_name": self.experiment_name,
+            "python_version": sys.version,
+            "package_versions": {
+                "sklearn": sklearn.__version__,
+                "pandas": pd.__version__,
+                "numpy": np.__version__,
+            },
         }
 
     def grid_search(
         self,
         X_train: pd.DataFrame,
-        y_train: Union[pd.Series, List[Any]],
+        y_train: pd.Series,
         param_grid: Dict[str, List[Any]],
         cv: int = 5,
         scoring: str = "accuracy",
@@ -88,21 +80,26 @@ class ExperimentManager:
         experiment_params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Perform grid search for hyperparameter tuning.
+        Performs grid search for hyperparameter tuning.
 
         Args:
-            X_train (pd.DataFrame): Training data.
-            y_train (Union[pd.Series, List[Any]]): Target values.
-            param_grid (Dict[str, List[Any]]): Parameters to tune.
-            cv (int): Number of cross-validation folds.
-            scoring (str): Metric to optimize.
-            n_jobs (int): Number of parallel jobs.
-            experiment_params (Optional[Dict[str, Any]]): Additional parameters to track
-                                                          with the experiment.
+            X_train (pd.DataFrame): Training features.
+            y_train (pd.Series): Training labels.
+            param_grid (Dict[str, List[Any]]): Hyperparameter grid for tuning.
+            cv (int, optional): Number of cross-validation folds. Defaults to 5.
+            scoring (str, optional): Scoring metric for evaluation. Defaults to "accuracy".
+            n_jobs (int, optional): Number of parallel jobs. Defaults to -1 (all available CPUs).
+            experiment_params (Optional[Dict[str, Any]], optional): Additional parameters for the 
+                                                                    experiment.
 
         Returns:
-            Dict[str, Any]: Experiment results.
+            Dict[str, Any]: Results of the grid search experiment.
         """
+        if self.logger:
+            self.logger.info(
+                f"Starting grid search for experiment {self.experiment_name}"
+            )
+
         steps = [
             (f"feature_engineer_{i}", fe)
             for i, fe in enumerate(self.base_pipeline.feature_engineers)
@@ -110,7 +107,7 @@ class ExperimentManager:
         steps.append(("model", self.base_pipeline.model))
         pipeline = Pipeline(steps=steps)
 
-        prefixed_param_grid = self._add_param_prefix(param_grid, "model")
+        prefixed_param_grid = {f"model__{k}": v for k, v in param_grid.items()}
 
         grid_search = GridSearchCV(
             pipeline,
@@ -121,16 +118,18 @@ class ExperimentManager:
             return_train_score=True,
         )
 
+        if self.logger:
+            self.logger.info("Fitting grid search CV")
         grid_search.fit(X_train, y_train)
-
-        best_params = self._strip_param_prefix(grid_search.best_params_, "model")
 
         experiment_id = self._create_experiment_id()
         experiment_results = {
             "experiment_id": experiment_id,
+            "metadata": self._get_experiment_metadata(),
             "type": "grid_search",
-            "timestamp": datetime.now().isoformat(),
-            "best_params": best_params,
+            "best_params": {
+                k.replace("model__", ""): v for k, v in grid_search.best_params_.items()
+            },
             "best_score": grid_search.best_score_,
             "cv_results": {
                 "mean_test_score": grid_search.cv_results_["mean_test_score"].tolist(),
@@ -150,58 +149,72 @@ class ExperimentManager:
 
         self.experiments[experiment_id] = experiment_results
         self._save_experiment(experiment_results)
+        self._save_model(grid_search.best_estimator_, experiment_id)
 
+        if self.logger:
+            self.logger.info("Grid search completed.")
         return experiment_results
 
     def _save_experiment(self, experiment_results: Dict[str, Any]) -> None:
-        """Save experiment results to file."""
-        filepath = os.path.join(
-            self.save_dir, f"{experiment_results['experiment_id']}.json"
-        )
+        """Saves experiment results to a file."""
+        experiment_id = experiment_results["experiment_id"]
+        filepath = self.output_manager.get_experiment_path(experiment_id)
+
         with open(filepath, "w", encoding="utf-8") as file:
             json.dump(experiment_results, file, indent=2)
 
+        if self.logger:
+            self.logger.info("Experiment saved")
+
+    def _save_model(self, model: BaseEstimator, experiment_id: str) -> None:
+        """Saves the trained model to a file."""
+        model_path = self.output_manager.get_model_path(experiment_id)
+        dump(model, model_path)
+        if self.logger:
+            self.logger.info("Model saved")
+
     def load_experiment(self, experiment_id: str) -> Dict[str, Any]:
-        """Load experiment results from file.
+        """Loads experiment results from a file."""
+        filepath = self.output_manager.get_experiment_path(experiment_id)
 
-        Args:
-            experiment_id (str): ID of the experiment to load.
-
-        Returns:
-            Dict[str, Any]: Loaded experiment results.
-        """
-        filepath = os.path.join(self.save_dir, f"{experiment_id}.json")
         with open(filepath, "r", encoding="utf-8") as file:
             return json.load(file)
 
+    def load_model(self, experiment_id: str) -> BaseEstimator:
+        """Loads a model from a file."""
+        model_path = self.output_manager.get_model_path(experiment_id)
+        return load(model_path)
+
     def get_best_experiment(self, metric: str = "best_score") -> Dict[str, Any]:
-        """Get the best experiment based on a specified metric.
+        """
+        Retrieves the best experiment based on a specified metric.
 
         Args:
-            metric (str): Metric to compare experiments.
+            metric (str, optional): Metric to evaluate experiments. Defaults to "best_score".
 
         Returns:
-            Dict[str, Any]: Best experiment results.
+            Dict[str, Any]: Details of the best experiment.
 
         Raises:
-            ValueError: If no experiments have been run.
+            ValueError: If no experiments have been conducted.
         """
         if not self.experiments:
             raise ValueError("No experiments have been run yet.")
 
-        return max(self.experiments.values(), key=lambda x: x[metric])
+        return max(self.experiments.values(), key=lambda exp: exp[metric])
 
     def compare_experiments(self, metric: str = "best_score") -> pd.DataFrame:
-        """Compare all experiments based on a specified metric.
+        """
+        Compares all experiments based on a specified metric.
 
         Args:
-            metric (str): Metric to compare experiments.
+            metric (str, optional): Metric to compare experiments. Defaults to "best_score".
 
         Returns:
-            pd.DataFrame: DataFrame containing comparison results.
+            pd.DataFrame: Comparison of experiments with details.
 
         Raises:
-            ValueError: If no experiments have been run.
+            ValueError: If no experiments have been conducted.
         """
         if not self.experiments:
             raise ValueError("No experiments have been run yet.")
@@ -209,23 +222,24 @@ class ExperimentManager:
         comparison_data = [
             {
                 "experiment_id": exp_id,
-                "timestamp": exp_results["timestamp"],
-                metric: exp_results[metric],
-                "parameters": exp_results["best_params"],
+                "timestamp": exp["metadata"]["timestamp"],
+                metric: exp[metric],
+                "parameters": exp["best_params"],
             }
-            for exp_id, exp_results in self.experiments.items()
+            for exp_id, exp in self.experiments.items()
         ]
 
         return pd.DataFrame(comparison_data)
 
     def apply_best_params(self, experiment_id: str) -> None:
-        """Apply the best parameters from a specific experiment to the base pipeline.
+        """
+        Applies the best parameters from a specific experiment to the base pipeline.
 
         Args:
-            experiment_id (str): ID of the experiment to apply.
+            experiment_id (str): ID of the experiment to retrieve parameters from.
 
         Raises:
-            ValueError: If the specified experiment ID is not found.
+            ValueError: If the specified experiment does not exist.
         """
         if experiment_id not in self.experiments:
             experiment = self.load_experiment(experiment_id)
