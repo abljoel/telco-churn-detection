@@ -43,6 +43,21 @@ class LinearModel(BaseModel):
         """
         return self.model.predict(X)
 
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class probabilities for the input data using the model.
+
+        This method computes class probabilities for each input sample using the `predict_proba`
+        method of the underlying model. The model must implement the `predict_proba` method.
+
+        Args:
+            X (np.ndarray): Feature matrix for prediction.
+
+        Returns:
+            np.ndarray: Predicted class probabilities
+        """
+        return self.model.predict_proba(X)
+
 
 class SklearnModel(BaseModel):
     """Wrapper for scikit-learn models to integrate with BaseModel interface.
@@ -105,6 +120,31 @@ class SklearnModel(BaseModel):
             np.ndarray: Predicted values.
         """
         return self.model.predict(X)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        """
+        Predict class probabilities for the input data, if supported by the model.
+
+        Args:
+            X (pd.DataFrame): Input data as a pandas DataFrame, where rows represent samples
+                            and columns represent features.
+
+        Returns:
+            np.ndarray: A 2D NumPy array where each row contains the predicted class probabilities
+                        for the corresponding input sample. The array shape is (n_samples,
+                        n_classes).
+
+        Raises:
+            NotImplementedError: If the underlying model does not implement `predict_proba` and the
+                                base class's `predict_proba` method is called.
+        Notes:
+            - If the model has a `predict_proba` method, it will be used directly.
+            - If not, this method defers to the base class implementation, which is expected to
+              raise an error unless explicitly overridden.
+        """
+        if hasattr(self.model, "predict_proba"):
+            return self.model.predict_proba(X)
+        return super().predict_proba(X)  # Will raise NotImplementedError
 
     def set_params(self, **params: Any) -> "SklearnModel":
         """Set parameters for the underlying model.

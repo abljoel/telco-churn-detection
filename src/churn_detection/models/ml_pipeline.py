@@ -81,6 +81,36 @@ class MLPipeline:
             X_transformed = engineer.transform(X_transformed)
         return self.model.predict(X_transformed)
 
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class probabilities for the input data using the configured model and feature 
+        engineers.
+
+        This method applies the feature engineering transformations sequentially to the input data
+        and then computes class probabilities using the model. The model must support the
+        `predict_proba` method; otherwise, an exception is raised.
+
+        Args:
+            X (np.ndarray): The input data as a NumPy array, where rows represent samples
+                            and columns represent features.
+
+        Returns:
+            np.ndarray: A 2D NumPy array where each row contains the predicted class probabilities
+                        for the corresponding input sample. The array shape is (n_samples, 
+                        n_classes).
+
+        Raises:
+            AttributeError: If the underlying model does not implement the `predict_proba` method.
+        """
+        X_transformed = X
+        for engineer in self.feature_engineers:
+            X_transformed = engineer.transform(X_transformed)
+        if not hasattr(self.model, "predict_proba"):
+            raise AttributeError(
+                "The underlying model doesn't support probability predictions"
+            )
+        return self.model.predict_proba(X_transformed)
+
     def evaluate(self, X: np.ndarray, y_true: np.ndarray) -> Dict[str, float]:
         """
         Evaluate the pipeline using the provided metrics.
@@ -109,14 +139,17 @@ def create_pipeline(config: Dict[str, Any]) -> MLPipeline:
     with modular components that can be dynamically adapted based on the configuration settings.
 
     Args:
-        config (Dict[str, Any]): A dictionary containing the pipeline configuration. It should include:
+        config (Dict[str, Any]): A dictionary containing the pipeline configuration. It should 
+            include:
             - `feature_engineering`: A dictionary with:
                 - `type` (str): The type of feature engineering (e.g., "column_preprocessor").
-                - `params` (Dict): Parameters for feature engineering, including variable types and steps.
+                - `params` (Dict): Parameters for feature engineering, including variable types and 
+                   steps.
             - `model`: A dictionary with:
                 - `type` (str): The type of model (e.g., "logistic_regression").
                 - `params` (Dict): Model-specific parameters.
-            - `metrics` (List[str]): A list of metric labels to evaluate the model. Supported labels include:
+            - `metrics` (List[str]): A list of metric labels to evaluate the model. Supported labels 
+               include:
                 - "accuracy", "f1", "precision", "recall", "roc_auc", "pr_auc".
 
     Returns:

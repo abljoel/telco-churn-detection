@@ -45,6 +45,13 @@ class BaseModel(ABC):
         """
         pass
 
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Make probability predictions.
+        Not all models support this, so it's not an abstract method.
+        """
+        raise NotImplementedError("This model doesn't support probability predictions")
+
 
 class BaseFeatureEngineer(ABC):
     """Abstract base class for feature engineering."""
