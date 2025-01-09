@@ -18,15 +18,21 @@ Available Functions:
 """
 
 import warnings
-from typing import Literal, Any, Union
+from typing import Literal, Any, Union, Optional
 import matplotlib.pyplot as plt
 import pandas as pd
 from seaborn import pairplot, heatmap
 from sklearn.metrics import (
-    roc_curve,
-    roc_auc_score,
-    confusion_matrix,
     ConfusionMatrixDisplay,
+    confusion_matrix,
+    precision_recall_curve,
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    average_precision_score,
+    roc_curve,
 )
 import numpy as np
 import seaborn as sns
@@ -372,4 +378,104 @@ def plot_confusion_table(
         raise ValueError("The predicted labels 'y_pred' cannot be empty.")
 
     ConfusionMatrixDisplay(confusion_matrix(y, y_pred, normalize="true")).plot()
+    plt.show()
+
+
+def churn_performance_report(
+    y_true: Union[np.ndarray, list, pd.Series],
+    y_pred: Union[np.ndarray, list],
+    y_pred_proba: Optional[Union[np.ndarray, list]] = None,
+) -> None:
+    """
+    Generate a performance evaluation report for a churn prediction model.
+
+    Args:
+        y_true (Union[np.ndarray, list, pd.Series]): Ground truth labels.
+        y_pred (Union[np.ndarray, list]): Predicted labels.
+        y_pred_proba (Optional[Union[np.ndarray, list]]): Predicted probabilities for the
+                                                          positive class.
+                                                          Required for ROC-AUC and Precision-Recall
+                                                          Curve.
+
+    Returns:
+        None: Displays plots and prints evaluation metrics.
+    """
+    if not isinstance(y_true, (np.ndarray, list, pd.Series)):
+        raise ValueError(
+            "y_true must be array-like (e.g., list, numpy array, or pandas Series)."
+        )
+
+    if not isinstance(y_pred, (np.ndarray, list)):
+        raise ValueError("y_pred must be array-like (e.g., list or numpy array).")
+
+    if y_pred_proba is not None and not isinstance(y_pred_proba, (np.ndarray, list)):
+        raise ValueError("y_pred_proba must be array-like if provided.")
+
+    if len(y_true) != len(y_pred):
+        raise ValueError("y_true and y_pred must have the same length.")
+
+    plt.figure(figsize=(12, 10))
+    plt.suptitle("Churn Prediction Performance Report", fontsize=16, y=1.02)
+
+    # Confusion Matrix with Normalization
+    plt.subplot(2, 2, 1)
+    cm = confusion_matrix(y_true, y_pred, normalize="true")
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=cm, display_labels=["Not Churned", "Churned"]
+    )
+    disp.plot(cmap="Blues", ax=plt.gca(), colorbar=False)
+    plt.title("Confusion Matrix (Normalized)")
+
+    # Precision-Recall Curve
+    if y_pred_proba is not None:
+        plt.subplot(2, 2, 2)
+        precision, recall, _ = precision_recall_curve(y_true, y_pred_proba)
+        plt.plot(recall, precision, marker=".", label="Precision-Recall Curve")
+        plt.fill_between(recall, precision, alpha=0.2, color="b")
+        plt.xlabel("Recall")
+        plt.ylabel("Precision")
+        plt.title("Precision-Recall Curve")
+        plt.legend()
+
+    # Pie Chart: Percentage of Churned Customers Reached
+    plt.subplot(2, 2, 3)
+    churned_reached = np.sum((np.array(y_true) == 1) & (np.array(y_pred) == 1))
+    total_churned = np.sum(np.array(y_true) == 1)
+    if total_churned > 0:
+        labels = ["Reached", "Not Reached"]
+        sizes = [churned_reached, total_churned - churned_reached]
+        plt.pie(
+            sizes,
+            labels=labels,
+            autopct="%1.1f%%",
+            colors=["lightcoral", "lightblue"],
+            startangle=90,
+        )
+        plt.title("Percentage of Churned Customers Reached")
+    else:
+        plt.text(
+            0.5, 0.5, "No Churned Customers in Ground Truth", ha="center", va="center"
+        )
+
+    # Evaluation Metrics
+    plt.subplot(2, 2, 4)
+    metrics = {
+        "Accuracy": accuracy_score(y_true, y_pred),
+        "F1 Score": f1_score(y_true, y_pred),
+        "Precision": precision_score(y_true, y_pred),
+        "Recall": recall_score(y_true, y_pred),
+    }
+
+    if y_pred_proba is not None:
+        metrics["ROC-AUC Score"] = roc_auc_score(y_true, y_pred_proba)
+        metrics["Average Precision Score"] = average_precision_score(
+            y_true, y_pred_proba
+        )
+
+    metrics_text = "\n".join([f"{key}: {value:.2f}" for key, value in metrics.items()])
+    plt.text(0.2, 0.6, metrics_text, fontsize=12, va="center")
+    plt.axis("off")
+    plt.title("Evaluation Metrics")
+
+    plt.tight_layout()
     plt.show()
