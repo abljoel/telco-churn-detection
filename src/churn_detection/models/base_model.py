@@ -1,11 +1,10 @@
 """Base Model Utilities"""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 import numpy as np
-import pandas as pd
 from sklearn.pipeline import Pipeline
-from ..features import Transformation, ColumnPreprocessor
+from churn_detection.features import Transformation, ColumnPreprocessor
 
 
 class BaseModel(ABC):
@@ -66,12 +65,15 @@ class BaseFeatureEngineer(ABC):
         self.config = config
 
     @abstractmethod
-    def fit_transform(self, X: np.ndarray) -> np.ndarray:
+    def fit_transform(
+        self, X: np.ndarray, y: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """
         Fit and transform features.
 
         Args:
             X (np.ndarray): Input features.
+            y (Optional[np.ndarray]): Target values (optional).
 
         Returns:
             np.ndarray: Transformed features.
@@ -97,83 +99,145 @@ class ColumnPreprocessorFeatures(BaseFeatureEngineer):
     Wrapper for the column preprocessor system that implements the BaseFeatureEngineer interface.
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: Optional[Dict] = None, **kwargs):
         """
         Initialize the ColumnPreprocessorFeatures with a configuration.
 
         Args:
-            config (Dict): Configuration dictionary for the column preprocessor.
+            config (Optional[Dict]): Configuration dictionary for the column preprocessor.
+            **kwargs: Additional keyword arguments passed during parameter tuning.
         """
-        super().__init__(config)
+        config = config or {}
+
+        combined_config = {**config, **kwargs}
+        super().__init__(combined_config)
+
         self.preprocessor: Optional[Pipeline] = None
         self._setup_preprocessor()
 
     def _setup_preprocessor(self) -> None:
-        """
-        Setup the column preprocessor based on the provided configuration.
-        """
-        preprocessor = ColumnPreprocessor()
+        """Setup the column preprocessor based on the provided configuration."""
+        # Initialize the ColumnPreprocessor with any relevant parameters
+        preprocessor = ColumnPreprocessor(
+            remainder=self.config.get("remainder", "drop"),
+            sparse_threshold=self.config.get("sparse_threshold", 0.3),
+            n_jobs=self.config.get("n_jobs", None),
+            transformer_weights=self.config.get("transformer_weights", None),
+            verbose_feature_names_out=self.config.get(
+                "verbose_feature_names_out", True
+            ),
+            force_int_remainder_cols=self.config.get("force_int_remainder_cols", True),
+        )
 
         if "numerical" in self.config:
-            preprocessor.add_transformation(Transformation(**self.config["numerical"]))
+            try:
+                preprocessor.add_transformation(
+                    Transformation(**self.config["numerical"])
+                )
+            except Exception as e:
+                raise ValueError(f"Error adding numerical transformations: {e}")
 
         if "categorical" in self.config:
-            preprocessor.add_transformation(
-                Transformation(**self.config["categorical"])
-            )
+            try:
+                preprocessor.add_transformation(
+                    Transformation(**self.config["categorical"])
+                )
+            except Exception as e:
+                raise ValueError(f"Error adding categorical transformations: {e}")
 
         self.preprocessor = preprocessor.create_preprocessor()
 
-    def fit(
-        self, X: pd.DataFrame, y: Optional[pd.Series] = None
-    ) -> "ColumnPreprocessorFeatures":
-        """
-        Fit the preprocessor to the data.
-
-        Args:
-            X (pd.DataFrame): Input features.
-            y (Optional[pd.Series]): Target values (optional).
-
-        Returns:
-            ColumnPreprocessorFeatures: The fitted preprocessor.
-        """
-        self.preprocessor.fit(X, y)
-        return self
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """
-        Transform data using the fitted preprocessor.
-
-        Args:
-            X (pd.DataFrame): Input features.
-
-        Returns:
-            pd.DataFrame: Transformed features as a DataFrame.
-        """
-        transformed_data = self.preprocessor.transform(X)
-        return pd.DataFrame(
-            transformed_data,
-            columns=self._get_feature_names(self.preprocessor, X.columns),
-        )
-
     def fit_transform(
-        self, X: pd.DataFrame, y: Optional[pd.Series] = None
-    ) -> pd.DataFrame:
+        self, X: np.ndarray, y: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """
         Fit the preprocessor and transform the data.
 
         Args:
-            X (pd.DataFrame): Input features.
-            y (Optional[pd.Series]): Target values (optional).
+            X (np.ndarray): Input features.
+            y (Optional[np.ndarray]): Target values (optional).
 
         Returns:
-            pd.DataFrame: Transformed features as a DataFrame.
+            np.ndarray: Transformed features.
         """
-        transformed_data = self.preprocessor.fit_transform(X)
-        return pd.DataFrame(
-            transformed_data,
-            columns=self._get_feature_names(self.preprocessor, X.columns),
-        )
+        if self.preprocessor is None:
+            self._setup_preprocessor()
+        return self.preprocessor.fit_transform(X, y)
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        """
+        Transform data using the fitted preprocessor.
+
+        Args:
+            X (np.ndarray): Input features.
+
+        Returns:
+            np.ndarray: Transformed features.
+        """
+        if self.preprocessor is None:
+            raise RuntimeError(
+                "Preprocessor not initialized. Call fit() or fit_transform() first."
+            )
+        return self.preprocessor.transform(X)
+
+    def __reduce__(self):
+        """Make the class picklable."""
+        return (self.__class__, (self.config,))
+
+    def __getstate__(self):
+        """Return state for pickling."""
+        state = self.__dict__.copy()
+        return state
+
+    def __setstate__(self, state):
+        """Set state during unpickling."""
+        self.__dict__.update(state)
+
+    def set_params(self, **params: Any) -> "ColumnPreprocessorFeatures":
+        """
+        Set the parameters of this preprocessor.
+
+        Args:
+            **params: Estimator parameters.
+
+        Returns:
+            self: Estimator instance.
+        """
+        # Split parameters into different categories
+        nested_params = {k: v for k, v in params.items() if "__" in k}
+        config_params = {k: v for k, v in params.items() if "__" not in k}
+
+        # Update config if we have config params
+        if config_params:
+            self.config.update(config_params)
+            self._setup_preprocessor()
+
+        # Update nested parameters in the preprocessor
+        if nested_params and self.preprocessor is not None:
+            self.preprocessor.set_params(**nested_params)
+
+        return self
+
+    def get_params(self, deep: bool = True) -> Dict[str, Any]:
+        """
+        Get parameters for this preprocessor.
+
+        Args:
+            deep (bool): If True, will return the parameters for this estimator and
+                        contained sub-objects that are estimators.
+
+        Returns:
+            Dict[str, Any]: Parameter names mapped to their values.
+        """
+        # Start with the configuration parameters
+        params = self.config.copy()
+
+        # Add nested parameters if deep=True and preprocessor exists
+        if deep and self.preprocessor is not None:
+            preprocessor_params = self.preprocessor.get_params(deep=deep)
+            params.update(preprocessor_params)
+
+        return params
 
     @staticmethod
     def _get_feature_names(
