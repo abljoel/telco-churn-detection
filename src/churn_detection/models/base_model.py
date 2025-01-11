@@ -117,7 +117,6 @@ class ColumnPreprocessorFeatures(BaseFeatureEngineer):
 
     def _setup_preprocessor(self) -> None:
         """Setup the column preprocessor based on the provided configuration."""
-        # Initialize the ColumnPreprocessor with any relevant parameters
         preprocessor = ColumnPreprocessor(
             remainder=self.config.get("remainder", "drop"),
             sparse_threshold=self.config.get("sparse_threshold", 0.3),
@@ -207,7 +206,6 @@ class ColumnPreprocessorFeatures(BaseFeatureEngineer):
         nested_params = {k: v for k, v in params.items() if "__" in k}
         config_params = {k: v for k, v in params.items() if "__" not in k}
 
-        # Update config if we have config params
         if config_params:
             self.config.update(config_params)
             self._setup_preprocessor()
@@ -229,10 +227,7 @@ class ColumnPreprocessorFeatures(BaseFeatureEngineer):
         Returns:
             Dict[str, Any]: Parameter names mapped to their values.
         """
-        # Start with the configuration parameters
         params = self.config.copy()
-
-        # Add nested parameters if deep=True and preprocessor exists
         if deep and self.preprocessor is not None:
             preprocessor_params = self.preprocessor.get_params(deep=deep)
             params.update(preprocessor_params)
