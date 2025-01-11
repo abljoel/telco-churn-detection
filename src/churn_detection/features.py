@@ -432,7 +432,7 @@ class RareCategoryEncoder(BaseEstimator, TransformerMixin):
         them with a specified value.
 
         Args:
-            tol (float): The minimum frequency (proportion) for a category to be considered 
+            tol (float): The minimum frequency (proportion) for a category to be considered
                          frequent.
             replace_with (str): The value to replace rare categories with.
         """
@@ -523,48 +523,81 @@ class Transformation:
         """
         return self.name, self.pipeline, self.variables
 
+    def __reduce__(self):
+        return (self.__class__, (self.name, self.steps, self.variables))
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
 
 class ColumnPreprocessor:
     """
-    A class to manage and create a column transformer preprocessor by adding various transformations
-    for different sets of variables.
+    A class to manage and create a column transformer preprocessor.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        remainder="drop",
+        sparse_threshold=0.3,
+        n_jobs=None,
+        transformer_weights=None,
+        verbose_feature_names_out=True,
+        force_int_remainder_cols=True,
+    ):
         """
         Initialize an empty list of transformations.
+
+        Args:
+            remainder: {'drop', 'passthrough'} or estimator, default='drop'
+            sparse_threshold: float, default=0.3
+            n_jobs: int, default=None
+            transformer_weights: dict, default=None
+            verbose_feature_names_out: bool, default=True
+            force_int_remainder_cols: bool, default=True
         """
         self.transformations = []
+        self.remainder = remainder
+        self.sparse_threshold = sparse_threshold
+        self.n_jobs = n_jobs
+        self.transformer_weights = transformer_weights
+        self.verbose_feature_names_out = verbose_feature_names_out
+        self.force_int_remainder_cols = force_int_remainder_cols
 
     def add_transformation(self, transformation: Transformation):
-        """
-        Add a transformation to the list of transformations.
-
-        Parameters:
-        transformation: Transformation
-            The transformation to be added.
-        """
+        """Add a transformation to the list of transformations."""
+        if not isinstance(transformation, Transformation):
+            raise TypeError(
+                f"Expected a Transformation object, got {type(transformation)}"
+            )
         self.transformations.append(transformation.get_tuple())
 
     def create_preprocessor(self) -> ColumnTransformer:
-        """
-        Create a column transformer preprocessor.
-
-        Returns:
-        ColumnTransformer
-            A column transformer for preprocessing different columns.
-        """
-        return ColumnTransformer(transformers=self.transformations)
+        """Create a column transformer preprocessor."""
+        return ColumnTransformer(
+            transformers=self.transformations,
+            remainder=self.remainder,
+            sparse_threshold=self.sparse_threshold,
+            n_jobs=self.n_jobs,
+            transformer_weights=self.transformer_weights,
+            verbose_feature_names_out=self.verbose_feature_names_out,
+            force_int_remainder_cols=self.force_int_remainder_cols,
+        )
 
     def get_transformations(self) -> List[Tuple[str, Pipeline, List[str]]]:
-        """
-        Get the list of transformations.
-
-        Returns:
-        List[Tuple[str, Pipeline, List[str]]]
-            The list of transformations added to the preprocessor.
-        """
+        """Get the list of transformations."""
         return self.transformations
+
+    def __reduce__(self):
+        return (self.__class__, (), self.__dict__)
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
 
 def add_transformation(
