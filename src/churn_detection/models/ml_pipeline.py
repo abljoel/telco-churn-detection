@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Callable, Any
 import numpy as np
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -10,7 +11,11 @@ from sklearn.metrics import (
     roc_auc_score,
     average_precision_score,
 )
-from .base_model import BaseModel, BaseFeatureEngineer, ColumnPreprocessorFeatures
+from churn_detection.models.base_model import (
+    BaseModel,
+    BaseFeatureEngineer,
+    ColumnPreprocessorFeatures,
+)
 from .linear_classifier import SklearnModel
 
 
@@ -26,108 +31,126 @@ METRIC_MAP = {
 
 class MLPipeline:
     """
-    A machine learning pipeline for handling feature engineering, model training,
+    A machine learning pipeline for feature engineering, model training,
     prediction, and evaluation.
 
     Attributes:
-        feature_engineers (List[BaseFeatureEngineer]): List of feature engineering steps.
-        model (BaseModel): The model used for training and prediction.
-        metrics (Dict[str, Callable]): Dictionary mapping metric names to metric functions.
+        feature_engineers (List[BaseFeatureEngineer]):
+            List of feature engineering steps to apply to the data.
+        model (BaseModel):
+            Machine learning model to use for training and prediction.
+        metrics (Dict[str, Callable[[np.ndarray, np.ndarray], float]]):
+            Dictionary of metric names and corresponding evaluation functions.
+        _pipeline (Pipeline):
+            Internal scikit-learn pipeline combining feature engineering and the model.
     """
 
     def __init__(
         self,
-        feature_engineers: List[BaseFeatureEngineer],
-        model: BaseModel,
+        feature_engineers: List["BaseFeatureEngineer"],
+        model: "BaseModel",
         metrics: Dict[str, Callable[[np.ndarray, np.ndarray], float]],
     ) -> None:
         """
-        Initializes the MLPipeline.
+        Initialize the MLPipeline with feature engineering steps, a model, and evaluation metrics.
 
         Args:
-            feature_engineers (List[BaseFeatureEngineer]): List of feature engineering steps.
-            model (BaseModel): The model for training and prediction.
-            metrics (Dict[str, Callable]): Metric functions for evaluation.
+            feature_engineers (List[BaseFeatureEngineer]):
+                List of feature engineering steps to apply to the data.
+            model (BaseModel):
+                Machine learning model to use for training and prediction.
+            metrics (Dict[str, Callable[[np.ndarray, np.ndarray], float]]):
+                Dictionary of metric names and their corresponding functions.
         """
         self.feature_engineers = feature_engineers
         self.model = model
         self.metrics = metrics
+        self._pipeline = None
+        self._setup_pipeline()
+
+    def _setup_pipeline(self) -> None:
+        """
+        Set up the scikit-learn pipeline with feature engineering steps and the model.
+        """
+        steps = [
+            (f"feature_engineer_{i}", engineer)
+            for i, engineer in enumerate(self.feature_engineers)
+        ]
+        steps.append(("model", self.model))
+        self._pipeline = Pipeline(steps=steps)
 
     def train(self, X: np.ndarray, y: np.ndarray) -> None:
         """
-        Train the pipeline by applying feature engineering and training the model.
+        Train the pipeline by applying feature engineering and fitting the model.
 
         Args:
-            X (np.ndarray): Feature data for training.
-            y (np.ndarray): Target labels for training.
+            X (np.ndarray):
+                Input features.
+            y (np.ndarray):
+                Target values.
         """
-        X_transformed = X
-        for engineer in self.feature_engineers:
-            X_transformed = engineer.fit_transform(X_transformed)
-        self.model.train(X_transformed, y)
+        self._pipeline.fit(X, y)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
         Make predictions using the trained pipeline.
 
         Args:
-            X (np.ndarray): Feature data for prediction.
+            X (np.ndarray):
+                Input features.
 
         Returns:
-            np.ndarray: Predicted labels.
+            np.ndarray: Predictions made by the model.
         """
-        X_transformed = X
-        for engineer in self.feature_engineers:
-            X_transformed = engineer.transform(X_transformed)
-        return self.model.predict(X_transformed)
+        return self._pipeline.predict(X)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """
-        Predict class probabilities for the input data using the configured model and feature 
-        engineers.
-
-        This method applies the feature engineering transformations sequentially to the input data
-        and then computes class probabilities using the model. The model must support the
-        `predict_proba` method; otherwise, an exception is raised.
+        Predict class probabilities using the trained pipeline.
 
         Args:
-            X (np.ndarray): The input data as a NumPy array, where rows represent samples
-                            and columns represent features.
+            X (np.ndarray):
+                Input features.
 
         Returns:
-            np.ndarray: A 2D NumPy array where each row contains the predicted class probabilities
-                        for the corresponding input sample. The array shape is (n_samples, 
-                        n_classes).
+            np.ndarray: Predicted probabilities for each class.
 
         Raises:
-            AttributeError: If the underlying model does not implement the `predict_proba` method.
+            AttributeError: If the underlying model does not support probability predictions.
         """
-        X_transformed = X
-        for engineer in self.feature_engineers:
-            X_transformed = engineer.transform(X_transformed)
-        if not hasattr(self.model, "predict_proba"):
+        if not hasattr(self._pipeline, "predict_proba"):
             raise AttributeError(
-                "The underlying model doesn't support probability predictions"
+                "The underlying model does not support probability predictions."
             )
-        return self.model.predict_proba(X_transformed)
+        return self._pipeline.predict_proba(X)
 
     def evaluate(self, X: np.ndarray, y_true: np.ndarray) -> Dict[str, float]:
         """
         Evaluate the pipeline using the provided metrics.
 
         Args:
-            X (np.ndarray): Feature data for evaluation.
-            y_true (np.ndarray): True target labels.
+            X (np.ndarray):
+                Input features.
+            y_true (np.ndarray):
+                True target values.
 
         Returns:
-            Dict[str, float]: Evaluation results for each metric.
+            Dict[str, float]: A dictionary containing the evaluation results for each metric.
         """
         y_pred = self.predict(X)
-        results = {
+        return {
             metric_name: metric_func(y_true, y_pred)
             for metric_name, metric_func in self.metrics.items()
         }
-        return results
+
+    def get_pipeline(self) -> Pipeline:
+        """
+        Retrieve the underlying scikit-learn pipeline.
+
+        Returns:
+            Pipeline: The internal scikit-learn pipeline.
+        """
+        return self._pipeline
 
 
 def create_pipeline(config: Dict[str, Any]) -> MLPipeline:
@@ -139,16 +162,16 @@ def create_pipeline(config: Dict[str, Any]) -> MLPipeline:
     with modular components that can be dynamically adapted based on the configuration settings.
 
     Args:
-        config (Dict[str, Any]): A dictionary containing the pipeline configuration. It should 
+        config (Dict[str, Any]): A dictionary containing the pipeline configuration. It should
             include:
             - `feature_engineering`: A dictionary with:
                 - `type` (str): The type of feature engineering (e.g., "column_preprocessor").
-                - `params` (Dict): Parameters for feature engineering, including variable types and 
+                - `params` (Dict): Parameters for feature engineering, including variable types and
                    steps.
             - `model`: A dictionary with:
                 - `type` (str): The type of model (e.g., "logistic_regression").
                 - `params` (Dict): Model-specific parameters.
-            - `metrics` (List[str]): A list of metric labels to evaluate the model. Supported labels 
+            - `metrics` (List[str]): A list of metric labels to evaluate the model. Supported labels
                include:
                 - "accuracy", "f1", "precision", "recall", "roc_auc", "pr_auc".
 
