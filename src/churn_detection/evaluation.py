@@ -2,14 +2,18 @@
 Python module for model evaluation utilities.
 """
 
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional, Literal
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.base import BaseEstimator
 from sklearn.metrics import (
     roc_auc_score,
     classification_report,
     average_precision_score,
+    f1_score,
+    recall_score,
+    precision_score,
 )
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from .preprocessing import split_data
@@ -174,3 +178,63 @@ def validate_model_with_cv(
     std_dev = cv_results.std()
 
     return mean_score, std_dev
+
+
+def explore_thresholds(
+    y_probs: np.ndarray,
+    y_test: pd.Series,
+    func: Literal["f1", "recall", "precision"],
+    n_samples: int = 10,
+    scores: bool = True,
+    plot: Optional[bool] = None,
+) -> None:
+    """
+    Explore the performance of a classification model across different thresholds.
+
+    Parameters:
+    -----------
+    y_probs : np.ndarray
+        An array of predicted probabilities from the model.
+
+    y_test : pd.Series
+        The true labels of the test dataset.
+
+    func : Literal["f1", "recall", "precision"]
+        The evaluation metric to calculate. Options are:
+        - "f1": F1-score
+        - "recall": Recall score
+        - "precision": Precision score
+
+    n_samples : int, optional, default=10
+        The number of thresholds to evaluate, evenly spaced between 0 and 1.
+
+    scores : bool, optional, default=True
+        Whether to print the metric scores for each threshold.
+
+    plot : Optional[bool], optional, default=None
+        Whether to plot the scores against the thresholds. If set to True, a plot will
+        be displayed showing the metric values as a function of the thresholds.
+
+    Returns:
+    --------
+    None
+        The function prints the metric scores for each threshold if `scores` is True
+        and optionally plots the metric values if `plot` is True.
+    """
+    metrics = {"f1": f1_score, "recall": recall_score, "precision": precision_score}
+
+    thresholds = np.linspace(0, 1, n_samples)
+    scores = []
+    for thres in thresholds:
+        churn = y_probs >= thres
+        pred = metrics[func](y_test, churn)
+        scores.append(pred)
+
+        if scores:
+            print(f"Threshold: {thres:.2f} - {func} Score: {pred:.3f}")
+
+    if plot:
+        plt.plot(thresholds, scores)
+        plt.xlabel("Thresholds")
+        plt.ylabel(f"{func}")
+        plt.show()
