@@ -87,7 +87,7 @@ class ExperimentManager:
             y_train (pd.Series): Training labels.
             param_grid (Dict[str, List[Any]]): Parameter grid for tuning.
                 Can include both model parameters (prefixed with "model__")
-                and feature engineering parameters (prefixed with "feature_engineer_N__").
+                and feature engineering parameters (prefixed with "feature_engineer__").
             cv (int): Number of cross-validation folds.
             scoring (str): Scoring metric for evaluation.
             n_jobs (int): Number of parallel jobs.
@@ -109,7 +109,7 @@ class ExperimentManager:
                 f"model__{param}"
                 if not any(
                     param.startswith(prefix)
-                    for prefix in ["model__", "feature_engineer_"]
+                    for prefix in ["model__", "feature_engineer__"]
                 )
                 else param
             ): values
@@ -187,20 +187,21 @@ class ExperimentManager:
             model (BaseEstimator): The model to save.
             experiment_id (str): Unique identifier for the experiment.
         """
-        if not self.output_manager.enable_model_saving:
-            return
+        # if not self.output_manager.enable_model_saving:
+        #     return
 
-        try:
-            model_path = self.output_manager.get_model_path(experiment_id)
-            dump(model, model_path)
+        # try:
+        #     model_path = self.output_manager.get_model_path(experiment_id)
+        #     dump(model, model_path)
 
-            if self.logger:
-                self.logger.info("Model saved")
+        #     if self.logger:
+        #         self.logger.info("Model saved")
 
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"Error saving model: {str(e)}")
-            raise
+        # except Exception as e:
+        #     if self.logger:
+        #         self.logger.error(f"Error saving model: {str(e)}")
+        #     raise
+        pass # This skips the model saving step
 
     def load_model(self, experiment_id: str) -> BaseEstimator:
         """
@@ -212,8 +213,9 @@ class ExperimentManager:
         Returns:
             BaseEstimator: The loaded model.
         """
-        model_path = self.output_manager.get_model_path(experiment_id)
-        return load(model_path)
+        # model_path = self.output_manager.get_model_path(experiment_id)
+        # return load(model_path)
+        pass # This skips the model loading step
 
     def load_experiment(self, experiment_id: str) -> Dict[str, Any]:
         """Loads experiment results from a file."""
@@ -287,9 +289,9 @@ class ExperimentManager:
 
         # Separate feature engineering and model parameters
         feature_engineer_params = {
-            k.replace("feature_engineer_0__", ""): v
+            k.replace("feature_engineer__", ""): v
             for k, v in best_params.items()
-            if k.startswith("feature_engineer_0__")
+            if k.startswith("feature_engineer__")
         }
         model_params = {
             k.replace("model__", ""): v
@@ -299,7 +301,7 @@ class ExperimentManager:
 
         # Apply feature engineering parameters
         feature_engineer = self.base_pipeline.get_pipeline().named_steps[
-            "feature_engineer_0"
+            "feature_engineer"
         ]
         if feature_engineer and hasattr(feature_engineer, "set_params"):
             feature_engineer.set_params(**feature_engineer_params)

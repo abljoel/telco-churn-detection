@@ -73,7 +73,7 @@ class MLPipeline:
         Set up the scikit-learn pipeline with feature engineering steps and the model.
         """
         steps = [
-            (f"feature_engineer_{i}", engineer)
+            (f"feature_engineer", engineer)
             for i, engineer in enumerate(self.feature_engineers)
         ]
         steps.append(("model", self.model))
