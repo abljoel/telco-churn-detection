@@ -21,9 +21,9 @@ class ExperimentManager:
     result tracking, and experiment comparison.
 
     Attributes:
-        base_pipeline (BaseEstimator): The base pipeline to use for experiments.
-        experiment_name (str): Name of the experiment.
-        output_manager (OutputManager): Manages experiment output.
+        base_pipeline (BaseEstimator): The base pipeline used for experiments.
+        experiment_name (str): The name of the experiment.
+        output_manager (OutputManager): Handles output-related tasks.
         experiments (Dict[str, Any]): Stores details of all experiments.
         logger (Optional[logging.Logger]): Logger for experiment-related messages.
     """
@@ -67,6 +67,85 @@ class ExperimentManager:
                 "numpy": np.__version__,
             },
         }
+
+    def _convert_tuples_for_saving(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert tuples in parameters to a special format for JSON serialization.
+
+        Args:
+            params (Dict[str, Any]): Parameters dictionary
+
+        Returns:
+            Dict[str, Any]: Parameters with tuples converted to special format
+        """
+        converted = {}
+        for key, value in params.items():
+            if isinstance(value, tuple):
+                converted[key] = {"__tuple__": True, "items": list(value)}
+            elif isinstance(value, list) and any(
+                isinstance(item, tuple) for item in value
+            ):
+                converted[key] = [
+                    (
+                        {"__tuple__": True, "items": list(item)}
+                        if isinstance(item, tuple)
+                        else item
+                    )
+                    for item in value
+                ]
+            else:
+                converted[key] = value
+        return converted
+
+    def _convert_tuples_from_saving(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert special format back to tuples when loading from JSON.
+
+        Args:
+            params (Dict[str, Any]): Parameters dictionary from JSON
+
+        Returns:
+            Dict[str, Any]: Parameters with special format converted back to tuples
+        """
+        converted = {}
+        for key, value in params.items():
+            if isinstance(value, dict) and value.get("__tuple__"):
+                converted[key] = tuple(value["items"])
+            elif isinstance(value, list):
+                converted[key] = [
+                    (
+                        tuple(item["items"])
+                        if isinstance(item, dict) and item.get("__tuple__")
+                        else item
+                    )
+                    for item in value
+                ]
+            else:
+                converted[key] = value
+        return converted
+
+    def _extract_timestamp(self, experiment_id: str) -> str:
+        """
+        Extract the timestamp part from either a full experiment ID or just a timestamp.
+
+        Args:
+            experiment_id (str): Either a timestamp ID (e.g., "20250113_130058") or
+                               a full experiment ID (e.g., "churn_detection.logistic_regression_20250113_130058")
+
+        Returns:
+            str: The timestamp part of the ID
+        """
+        # If it contains underscores, take the last two parts (date_time)
+        parts = experiment_id.split("_")
+        if len(parts) > 2:
+            return f"{parts[-2]}_{parts[-1]}"
+        return experiment_id  # Already just the timestamp
+
+    def _find_experiment_file(self, timestamp: str) -> str:
+        """Find the experiment file that matches the timestamp."""
+        experiment_files = list(self.output_manager.experiments_dir.glob("*.json"))
+        for file_path in experiment_files:
+            if timestamp in file_path.stem:
+                return file_path.stem
+        raise FileNotFoundError(f"No experiment file found with timestamp {timestamp}")
 
     def grid_search(
         self,
@@ -137,6 +216,9 @@ class ExperimentManager:
             for param, value in grid_search.best_params_.items()
         }
 
+        # Convert tuples to a special format before saving
+        cleaned_best_params = self._convert_tuples_for_saving(cleaned_best_params)
+
         experiment_id = self._create_experiment_id()
         experiment_results = {
             "experiment_id": experiment_id,
@@ -201,7 +283,7 @@ class ExperimentManager:
         #     if self.logger:
         #         self.logger.error(f"Error saving model: {str(e)}")
         #     raise
-        pass # This skips the model saving step
+        pass  # This skips the model saving step
 
     def load_model(self, experiment_id: str) -> BaseEstimator:
         """
@@ -215,14 +297,28 @@ class ExperimentManager:
         """
         # model_path = self.output_manager.get_model_path(experiment_id)
         # return load(model_path)
-        pass # This skips the model loading step
+        pass  # This skips the model loading step
 
     def load_experiment(self, experiment_id: str) -> Dict[str, Any]:
-        """Loads experiment results from a file."""
-        filepath = self.output_manager.get_experiment_path(experiment_id)
+        """
+        Loads experiment results from a file. Works with either timestamp or full experiment ID.
+
+        Args:
+            experiment_id (str): Either a timestamp ID or a full experiment ID
+
+        Returns:
+            Dict[str, Any]: The loaded experiment data
+        """
+        timestamp = self._extract_timestamp(experiment_id)
+        full_id = self._find_experiment_file(timestamp)
+        filepath = self.output_manager.get_experiment_path(full_id)
 
         with open(filepath, "r", encoding="utf-8") as file:
-            return json.load(file)
+            experiment_data = json.load(file)
+            experiment_data["best_params"] = self._convert_tuples_from_saving(
+                experiment_data["best_params"]
+            )
+            return experiment_data
 
     def get_best_experiment(self, metric: str = "best_score") -> Dict[str, Any]:
         """
@@ -280,10 +376,13 @@ class ExperimentManager:
         Raises:
             ValueError: If the specified experiment does not exist.
         """
-        if experiment_id not in self.experiments:
-            experiment = self.load_experiment(experiment_id)
+        timestamp = self._extract_timestamp(experiment_id)
+        full_id = self._find_experiment_file(timestamp)
+
+        if full_id not in self.experiments:
+            experiment = self.load_experiment(full_id)
         else:
-            experiment = self.experiments[experiment_id]
+            experiment = self.experiments[full_id]
 
         best_params = experiment["best_params"]
 
