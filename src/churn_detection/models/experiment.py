@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 import sys
 import pandas as pd
 import numpy as np
@@ -128,7 +128,7 @@ class ExperimentManager:
 
         Args:
             experiment_id (str): Either a timestamp ID (e.g., "20250113_130058") or
-                               a full experiment ID (e.g., "churn_detection.logistic_regression_20250113_130058")
+                                 a full experiment ID (e.g., "churn.logit_20250113_130058")
 
         Returns:
             str: The timestamp part of the ID
@@ -320,51 +320,127 @@ class ExperimentManager:
             )
             return experiment_data
 
-    def get_best_experiment(self, metric: str = "best_score") -> Dict[str, Any]:
+    def get_best_experiment(
+        self,
+        metric: str = "best_score",
+        stage: str = "test",
+    ) -> Dict[str, Any]:
         """
-        Retrieves the best experiment based on a specified metric.
+        Retrieves the best experiment based on a specified metric and stage.
 
         Args:
-            metric (str, optional): Metric to evaluate experiments. Defaults to "best_score".
+            metric (str): Metric to evaluate experiments. Can be:
+                - 'best_score': Uses the best CV score (default)
+                - Any metric name used during training (e.g., 'f1', 'recall', 'precision')
+            stage (str): Which stage to evaluate ('train' or 'test'). Defaults to 'test'.
 
         Returns:
             Dict[str, Any]: Details of the best experiment.
 
         Raises:
-            ValueError: If no experiments have been conducted.
+            ValueError: If no experiments have been conducted or if invalid metric/stage is
+                        specified.
         """
         if not self.experiments:
             raise ValueError("No experiments have been run yet.")
 
-        return max(self.experiments.values(), key=lambda exp: exp[metric])
+        if metric == "best_score":
+            return max(self.experiments.values(), key=lambda exp: exp["best_score"])
 
-    def compare_experiments(self, metric: str = "best_score") -> pd.DataFrame:
+        if stage not in ["train", "test"]:
+            raise ValueError("stage must be either 'train' or 'test'")
+
+        metric_key = f"mean_{stage}_{metric}"
+
+        best_exp = None
+        best_score = float("-inf")
+
+        for exp in self.experiments.values():
+            if "cv_results" not in exp:
+                continue
+
+            cv_results = exp["cv_results"]
+            if metric_key in cv_results:
+                score = max(cv_results[metric_key])
+                if score > best_score:
+                    best_score = score
+                    best_exp = exp
+
+        if best_exp is None:
+            raise ValueError(
+                f"No experiments found with metric '{metric}' for stage '{stage}'"
+            )
+
+        return best_exp
+
+    def compare_experiments(
+        self,
+        metrics: Union[str, List[str]] = "best_score",
+        stage: str = "test",
+    ) -> pd.DataFrame:
         """
-        Compares all experiments based on a specified metric.
+        Compares all experiments based on specified metrics.
 
         Args:
-            metric (str, optional): Metric to compare experiments. Defaults to "best_score".
+            metrics (Union[str, List[str]]): Metrics to compare experiments. Can be:
+                - 'best_score': Uses the best CV score
+                - Any metric name used during training (e.g., 'f1', 'recall', 'precision')
+                - A list of metric names
+            stage (str): Which stage to evaluate ('train' or 'test'). Defaults to 'test'.
 
         Returns:
-            pd.DataFrame: Comparison of experiments with details.
+            pd.DataFrame: Comparison of experiments with details for each metric.
 
         Raises:
-            ValueError: If no experiments have been conducted.
+            ValueError: If no experiments have been conducted or if invalid metrics/stage specified.
         """
         if not self.experiments:
             raise ValueError("No experiments have been run yet.")
 
-        comparison_data = [
-            {
+        if isinstance(metrics, str):
+            metrics = [metrics]
+
+        if stage not in ["train", "test"]:
+            raise ValueError("stage must be either 'train' or 'test'")
+
+        comparison_data = []
+
+        for exp_id, exp in self.experiments.items():
+            exp_data = {
                 "experiment_id": exp_id,
                 "timestamp": exp["metadata"]["timestamp"],
-                metric: exp[metric],
                 "parameters": exp["best_params"],
             }
-            for exp_id, exp in self.experiments.items()
-        ]
 
-        return pd.DataFrame(comparison_data)
+            if "best_score" in metrics:
+                exp_data["best_score"] = exp["best_score"]
+
+            if "cv_results" in exp:
+                cv_results = exp["cv_results"]
+                for metric in metrics:
+                    if metric == "best_score":
+                        continue
+
+                    metric_key = f"mean_{stage}_{metric}"
+                    if metric_key in cv_results:
+                        exp_data[f"{metric}"] = max(cv_results[metric_key])
+                        exp_data[f"{metric}_std"] = cv_results[f"std_{stage}_{metric}"][
+                            cv_results[metric_key].index(max(cv_results[metric_key]))
+                        ]
+
+            comparison_data.append(exp_data)
+
+        df = pd.DataFrame(comparison_data)
+
+        sort_metric = metrics[0]
+        if sort_metric == "best_score":
+            df = df.sort_values("best_score", ascending=False)
+        else:
+            metric_col = f"{sort_metric}"
+            if metric_col in df.columns:
+                df = df.sort_values(metric_col, ascending=False)
+
+        return df
 
     def apply_best_params(self, experiment_id: str) -> None:
         """
