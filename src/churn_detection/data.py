@@ -82,38 +82,66 @@ def save_batch_data(
         )
 
 
-
-def load_data(save: bool = False) -> pd.DataFrame:
+def load_data(save: bool = False, use_cache: bool = True) -> pd.DataFrame:
     """
-    Loads customer churn data from Kaggle, with an option to save the data in the specified format.
+    Loads customer churn data, either from local storage if available or from Kaggle.
 
     Args:
         save (bool): If True, saves the downloaded data using the save_batch_data function.
-                     Defaults to True.
+                    Defaults to False.
+        use_cache (bool): If True, tries to load data from local storage first.
+                         If False, forces download from Kaggle. Defaults to True.
 
     Returns:
         pd.DataFrame: A DataFrame containing the customer churn data.
+
+    Raises:
+        FileNotFoundError: If use_cache is True but no local data file exists.
+        Exception: If there's an error downloading from Kaggle.
     """
-    kaggle_target_dataset = "blastchar/telco-customer-churn"
-    raw_data = Path("WA_Fn-UseC_-Telco-Customer-Churn.csv")
-    zip_file = Path("telco-customer-churn.zip")
+    # Define file paths
+    feather_path = EXTERNAL_DATA_DIR / "customer_churn.feather"
+    csv_path = EXTERNAL_DATA_DIR / "customer_churn.csv"
 
-    data = fetch_batch_data(
-        target=kaggle_target_dataset,
-        cwd_path=Path().cwd(),
-        zip_file=zip_file,
-        raw_data=raw_data,
-    )
+    # Try loading from cache if enabled
+    if use_cache:
+        if feather_path.exists():
+            return pd.read_feather(feather_path)
+        elif csv_path.exists():
+            return pd.read_csv(csv_path)
 
-    if save:
-        save_batch_data(
-            df=data,
-            target_path=EXTERNAL_DATA_DIR,
+    # If cache is not used or files don't exist, download from Kaggle
+    try:
+        kaggle_target_dataset = "blastchar/telco-customer-churn"
+        raw_data = Path("WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        zip_file = Path("telco-customer-churn.zip")
+
+        data = fetch_batch_data(
+            target=kaggle_target_dataset,
+            cwd_path=Path().cwd(),
             zip_file=zip_file,
             raw_data=raw_data,
         )
-    else:
-        subprocess.run(["cmd", "/c", "del", str(zip_file)], check=True)
-        subprocess.run(["cmd", "/c", "del", str(raw_data)], check=True)
 
-    return data
+        if save:
+            save_batch_data(
+                df=data,
+                target_path=EXTERNAL_DATA_DIR,
+                zip_file=zip_file,
+                raw_data=raw_data,
+            )
+        else:
+            # Clean up temporary files if not saving
+            subprocess.run(["cmd", "/c", "del", str(zip_file)], check=True)
+            subprocess.run(["cmd", "/c", "del", str(raw_data)], check=True)
+
+        return data
+
+    except Exception as e:
+        # If download fails and we were trying to use cache, provide a more helpful error
+        if use_cache:
+            raise Exception(
+                "Failed to load data from both local storage and Kaggle. "
+                f"Original error: {str(e)}"
+            ) from e
+        raise  # Re-raise the original exception if we weren't trying to use cache
