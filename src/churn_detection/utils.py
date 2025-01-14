@@ -10,7 +10,7 @@ import numpy as np
 from .paths import TRANSFORMED_DATA_DIR
 
 
-VALID_DATASET_NAMES = {"train", "validation", "test"}
+VALID_DATASET_NAMES = {"full_train", "train", "validation", "test"}
 
 
 def load_datasets(
@@ -20,8 +20,8 @@ def load_datasets(
     Load datasets from feather files.
 
     Args:
-        names (List[str]): A list of dataset names. Must be one or more of 'train', 'validation',
-                           and 'test'.
+        names (List[str]): A list of dataset names. Must be one or more of 'full_train', 'train',
+                           'validation', and 'test'.
         as_df (bool, optional): If True, returns a list of DataFrames. If False, returns a list
                                 of NumPy arrays.
 
