@@ -15,6 +15,10 @@ Available Functions:
 - plot_card: Plot bar chart of cardinality for discrete variables.
 - plot_cramer: Calculate Cramer's V correlation coefficient between categorical variables.
 - get_correlation_info: Plot a heatmap of correlations between numerical columns.
+- plot_cramer: Plot a heatmap of Cramer's V correlation coefficients between categorical columns.
+- plot_roc_curve: Plot the ROC curve for a given model and dataset.
+- plot_confusion_table: Display the confusion matrix for given predictions and true labels.
+- churn_performance_report: Generate a performance evaluation report for a churn prediction model.
 """
 
 import warnings
@@ -398,7 +402,7 @@ def churn_performance_report(
                                                           Curve.
 
     Returns:
-        None: Displays plots and prints evaluation metrics.
+        None: Displays plots.
     """
     if not isinstance(y_true, (np.ndarray, list, pd.Series)):
         raise ValueError(
@@ -460,22 +464,38 @@ def churn_performance_report(
     # Evaluation Metrics
     plt.subplot(2, 2, 4)
     metrics = {
-        "Accuracy": accuracy_score(y_true, y_pred),
-        "F1 Score": f1_score(y_true, y_pred),
-        "Precision": precision_score(y_true, y_pred),
+        "Acc": accuracy_score(y_true, y_pred),
+        "F1": f1_score(y_true, y_pred),
+        "Prec": precision_score(y_true, y_pred),
         "Recall": recall_score(y_true, y_pred),
     }
 
     if y_pred_proba is not None:
-        metrics["ROC-AUC Score"] = roc_auc_score(y_true, y_pred_proba)
-        metrics["Average Precision Score"] = average_precision_score(
-            y_true, y_pred_proba
+        metrics["ROC"] = roc_auc_score(y_true, y_pred_proba)
+        metrics["Avg Prec"] = average_precision_score(y_true, y_pred_proba)
+
+    metric_names = list(metrics.keys())
+    metric_values = list(metrics.values())
+
+    plt.subplot(2, 2, 4)
+
+    bars = plt.bar(metric_names, metric_values, color="skyblue", edgecolor="black")
+
+    for b in bars:
+        height = b.get_height()
+        plt.text(
+            b.get_x() + b.get_width() / 2.0,
+            height,
+            f"{height:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=8,
         )
 
-    metrics_text = "\n".join([f"{key}: {value:.2f}" for key, value in metrics.items()])
-    plt.text(0.2, 0.6, metrics_text, fontsize=12, va="center")
-    plt.axis("off")
-    plt.title("Evaluation Metrics")
+    plt.title("Performance Metrics", fontsize=12, fontweight="bold")
+    plt.xlabel("Metrics", fontsize=10)
+    plt.ylabel("Values", fontsize=10)
+    plt.ylim(0, 1.1)
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
 
     plt.tight_layout()
-    plt.show()
